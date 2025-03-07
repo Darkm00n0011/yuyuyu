@@ -1,8 +1,6 @@
 import os
 import requests
 import json
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
 
 # Load environment variables from Railway
 CLIENT_ID = os.getenv("CLIENT_ID")
@@ -30,12 +28,16 @@ def get_access_token():
 # Function to upload a video
 def upload_video(video_file, title, description, category_id="22", privacy_status="public"):
     access_token = get_access_token()
-    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "multipart/related; boundary=foo_bar_baz"}
     
-    params = {
-        "part": "snippet,status",
-        "notifySubscribers": True
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json; charset=UTF-8"
     }
+
+    params = {
+        "part": "snippet,status"
+    }
+    
     metadata = {
         "snippet": {
             "title": title,
@@ -48,44 +50,35 @@ def upload_video(video_file, title, description, category_id="22", privacy_statu
     }
     
     # Step 1: Upload metadata
-    metadata_str = json.dumps(metadata)
-    body = f"--foo_bar_baz\r\nContent-Type: application/json\r\n\r\n{metadata_str}\r\n--foo_bar_baz--"
-    
-    metadata_response = requests.post(UPLOAD_URL, headers=headers, params=params, data=body)
+    metadata_response = requests.post(UPLOAD_URL, headers=headers, params=params, json=metadata)
     metadata_response_json = metadata_response.json()
-    video_id = metadata_response_json.get("id")
-    
-    if not video_id:
+
+    if "id" not in metadata_response_json:
         print("Error uploading metadata:", metadata_response_json)
         return
     
+    video_id = metadata_response_json["id"]
+
     # Step 2: Upload video file using resumable upload
     headers["X-Upload-Content-Type"] = "video/mp4"
-    headers["X-Upload-Content-Length"] = str(os.path.getsize(video_file))
-    
     init_request = requests.post(
         f"{UPLOAD_URL}?uploadType=resumable&part=snippet,status&id={video_id}",
         headers=headers
     )
-    
+
     if init_request.status_code != 200:
         print("Error initializing upload:", init_request.json())
         return
-    
+
     upload_url = init_request.headers.get("Location")
     if not upload_url:
         print("Failed to retrieve upload URL")
         return
-    
+
     with open(video_file, "rb") as file:
         file_data = file.read()
-        upload_headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Content-Length": str(len(file_data)),
-            "Content-Type": "video/mp4"
-        }
-        upload_response = requests.put(upload_url, headers=upload_headers, data=file_data)
-    
+        upload_response = requests.put(upload_url, headers={"Content-Length": str(len(file_data))}, data=file_data)
+
     print("Upload response:", upload_response.json())
 
 # Example usage
