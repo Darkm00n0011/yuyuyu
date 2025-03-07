@@ -1,5 +1,6 @@
 import os
 import requests
+import json
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 
@@ -29,7 +30,8 @@ def get_access_token():
 # Function to upload a video
 def upload_video(video_file, title, description, category_id="22", privacy_status="public"):
     access_token = get_access_token()
-    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "multipart/related; boundary=foo_bar_baz"}
+    
     params = {
         "part": "snippet,status",
         "notifySubscribers": True
@@ -46,7 +48,10 @@ def upload_video(video_file, title, description, category_id="22", privacy_statu
     }
     
     # Step 1: Upload metadata
-    metadata_response = requests.post(UPLOAD_URL, headers=headers, params=params, json=metadata)
+    metadata_str = json.dumps(metadata)
+    body = f"--foo_bar_baz\r\nContent-Type: application/json\r\n\r\n{metadata_str}\r\n--foo_bar_baz--"
+    
+    metadata_response = requests.post(UPLOAD_URL, headers=headers, params=params, data=body)
     metadata_response_json = metadata_response.json()
     video_id = metadata_response_json.get("id")
     
@@ -56,6 +61,8 @@ def upload_video(video_file, title, description, category_id="22", privacy_statu
     
     # Step 2: Upload video file using resumable upload
     headers["X-Upload-Content-Type"] = "video/mp4"
+    headers["X-Upload-Content-Length"] = str(os.path.getsize(video_file))
+    
     init_request = requests.post(
         f"{UPLOAD_URL}?uploadType=resumable&part=snippet,status&id={video_id}",
         headers=headers
@@ -72,7 +79,12 @@ def upload_video(video_file, title, description, category_id="22", privacy_statu
     
     with open(video_file, "rb") as file:
         file_data = file.read()
-        upload_response = requests.put(upload_url, headers={"Content-Length": str(len(file_data))}, data=file_data)
+        upload_headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Length": str(len(file_data)),
+            "Content-Type": "video/mp4"
+        }
+        upload_response = requests.put(upload_url, headers=upload_headers, data=file_data)
     
     print("Upload response:", upload_response.json())
 
