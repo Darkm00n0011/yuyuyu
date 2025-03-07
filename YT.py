@@ -23,40 +23,58 @@ def get_access_token():
     response = requests.post(TOKEN_URL, data=data)
     response_json = response.json()
     if "access_token" not in response_json:
-        raise Exception("Failed to retrieve access token: " + str(response_json))
+        raise Exception("Failed to get access token: " + str(response_json))
     return response_json.get("access_token")
 
-# Function to upload a video using resumable upload
+# Function to upload a video
 def upload_video(video_file, title, description, category_id="22", privacy_status="public"):
     access_token = get_access_token()
     headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
-    params = {"part": "snippet,status", "notifySubscribers": True}
+    params = {
+        "part": "snippet,status",
+        "notifySubscribers": True
+    }
     metadata = {
-        "snippet": {"title": title, "description": description, "categoryId": category_id},
-        "status": {"privacyStatus": privacy_status}
+        "snippet": {
+            "title": title,
+            "description": description,
+            "categoryId": category_id
+        },
+        "status": {
+            "privacyStatus": privacy_status
+        }
     }
     
-    # Step 1: Initiate resumable upload
+    # Step 1: Upload metadata
     metadata_response = requests.post(UPLOAD_URL, headers=headers, params=params, json=metadata)
-    if metadata_response.status_code != 200:
-        raise Exception("Failed to initiate upload: " + str(metadata_response.json()))
     metadata_response_json = metadata_response.json()
     video_id = metadata_response_json.get("id")
-    upload_url = metadata_response.headers.get("Location")
     
-    if not video_id or not upload_url:
-        raise Exception("Upload initialization failed: " + str(metadata_response_json))
+    if not video_id:
+        print("Error uploading metadata:", metadata_response_json)
+        return
     
-    # Step 2: Upload video file in chunks
+    # Step 2: Upload video file using resumable upload
+    headers["X-Upload-Content-Type"] = "video/mp4"
+    init_request = requests.post(
+        f"{UPLOAD_URL}?uploadType=resumable&part=snippet,status&id={video_id}",
+        headers=headers
+    )
+    
+    if init_request.status_code != 200:
+        print("Error initializing upload:", init_request.json())
+        return
+    
+    upload_url = init_request.headers.get("Location")
+    if not upload_url:
+        print("Failed to retrieve upload URL")
+        return
+    
     with open(video_file, "rb") as file:
-        chunk_size = 1024 * 1024 * 8  # 8MB chunks
-        while chunk := file.read(chunk_size):
-            chunk_headers = {"Authorization": f"Bearer {access_token}", "Content-Length": str(len(chunk)), "Content-Range": f"bytes 0-{len(chunk)-1}/{os.path.getsize(video_file)}"}
-            upload_response = requests.put(upload_url, headers=chunk_headers, data=chunk)
-            if upload_response.status_code not in [200, 201]:
-                raise Exception("Chunk upload failed: " + str(upload_response.json()))
-
-    print("Upload successful! Video ID:", video_id)
+        file_data = file.read()
+        upload_response = requests.put(upload_url, headers={"Content-Length": str(len(file_data))}, data=file_data)
+    
+    print("Upload response:", upload_response.json())
 
 # Example usage
 if __name__ == "__main__":
