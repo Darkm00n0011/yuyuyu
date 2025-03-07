@@ -28,8 +28,14 @@ def get_access_token():
 # Function to upload metadata and get video ID
 def upload_metadata(title, description, category_id="22", privacy_status="public"):
     access_token = get_access_token()
-    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+    
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "multipart/related; boundary=foo_bar_baz"
+    }
+    
     params = {"part": "snippet,status"}
+    
     metadata = {
         "snippet": {
             "title": title,
@@ -40,31 +46,55 @@ def upload_metadata(title, description, category_id="22", privacy_status="public
             "privacyStatus": privacy_status
         }
     }
-    metadata_response = requests.post(UPLOAD_URL, headers=headers, params=params, json=metadata)
+    
+    # ایجاد فرمت صحیح برای multipart
+    metadata_str = json.dumps(metadata)
+    body = (
+        "--foo_bar_baz\r\n"
+        "Content-Type: application/json; charset=UTF-8\r\n\r\n"
+        f"{metadata_str}\r\n"
+        "--foo_bar_baz--"
+    )
+    
+    metadata_response = requests.post(UPLOAD_URL, headers=headers, params=params, data=body)
     metadata_response_json = metadata_response.json()
+    
     if "id" not in metadata_response_json:
         print("Error uploading metadata:", metadata_response_json)
         return None
+    
     return metadata_response_json["id"]
 
 # Function to upload video using resumable upload
 def upload_video(video_file, video_id):
     access_token = get_access_token()
+    
     headers = {
         "Authorization": f"Bearer {access_token}",
         "X-Upload-Content-Type": "video/mp4",
         "X-Upload-Content-Length": str(os.path.getsize(video_file))
     }
-    init_request = requests.post(f"{UPLOAD_URL}?uploadType=resumable&part=snippet,status&id={video_id}", headers=headers)
+    
+    init_request = requests.post(
+        f"{UPLOAD_URL}?uploadType=resumable&part=snippet,status&id={video_id}",
+        headers=headers
+    )
+    
     if init_request.status_code != 200:
         print("Error initializing upload:", init_request.json())
         return
+    
     upload_url = init_request.headers.get("Location")
     if not upload_url:
         print("Failed to retrieve upload URL")
         return
+    
     with open(video_file, "rb") as file:
-        upload_response = requests.put(upload_url, headers={"Authorization": f"Bearer {access_token}", "Content-Type": "video/mp4"}, data=file)
+        upload_response = requests.put(upload_url, headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "video/mp4"
+        }, data=file)
+    
     print("Upload response:", upload_response.json())
 
 # Example usage
