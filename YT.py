@@ -266,26 +266,31 @@ def enhance_audio(input_audio, output_audio="enhanced_voiceover.mp3"):
     print("🎧 Enhancing voiceover...")
 
     # بارگذاری فایل صوتی
-    audio = AudioSegment.from_file(input_audio)
+    try:
+        audio = AudioSegment.from_file(input_audio)
+    except Exception as e:
+        print(f"❌ Error loading audio file: {e}")
+        return None
 
     # **حذف نویز و نرمال‌سازی صدا**
     enhanced_audio = normalize(audio)
 
     # **افزودن افکت صوتی کلیک در ابتدای ویدیو**
-    click_sound = AudioSegment.from_file("sounds/click.mp3")
-if os.path.exists("sounds/click.mp3"):
-    click_sound = AudioSegment.from_file("sounds/click.mp3")
-    enhanced_audio = click_sound + enhanced_audio
-else:
-    print("⚠ Click sound not found, continuing without it.")
-
-    enhanced_audio = click_sound + enhanced_audio
+    try:
+        click_sound = AudioSegment.from_file("sounds/click.mp3")
+        enhanced_audio = click_sound + enhanced_audio
+    except FileNotFoundError:
+        print("⚠ Click sound file not found, continuing without it.")
 
     # ذخیره‌ی نسخه‌ی بهینه‌شده
-    enhanced_audio.export(output_audio, format="mp3")
-    
-    print(f"✅ Voiceover enhanced and saved as {output_audio}")
-    return output_audio
+    try:
+        enhanced_audio.export(output_audio, format="mp3")
+        print(f"✅ Voiceover enhanced and saved as {output_audio}")
+        return output_audio
+    except Exception as e:
+        print(f"❌ Error saving enhanced audio: {e}")
+        return None
+
 
 def enhance_video(input_video, output_video="enhanced_video.mp4"):
     """
