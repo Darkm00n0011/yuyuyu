@@ -486,7 +486,153 @@ def suggest_improvements():
         print("- Encourage more comments by asking interactive questions.")
         print("- Test different thumbnail styles (e.g., bold text, bright colors).")
 
+def check_copyright_violation(script):
+    """
+    بررسی متن تولید شده برای جلوگیری از کپی‌رایت.
+    """
+    prompt = f"""
+    Please analyze the following script for any copyright violations, plagiarism, or YouTube policy violations.
+    If the script is safe, return "SAFE".
+    If the script contains potential copyright or policy issues, return a short explanation.
 
+    Script:
+    {script}
+    """
+
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=100
+        )
+        result = response["choices"][0]["message"]["content"]
+
+        if "SAFE" in result:
+            print("✅ Script is safe.")
+            return True
+        else:
+            print(f"⚠ Potential issue detected: {result}")
+            return False
+    except Exception as e:
+        print("❌ Error checking copyright:", str(e))
+        return True  # اگر چکینگ انجام نشد، اجازه ادامه بده
+
+# استفاده از این بررسی در روند تولید متن
+if script and check_copyright_violation(script):
+    with open("video_script.txt", "w") as file:
+        file.write(script)
+    print("📜 Video script saved successfully!")
+else:
+    print("❌ Script rejected due to potential copyright or policy violations.")
+
+def check_youtube_policy(title, description):
+    """
+    بررسی عنوان و توضیحات برای اطمینان از عدم نقض قوانین یوتیوب.
+    """
+    prompt = f"""
+    Please analyze the following YouTube video metadata to check if it violates YouTube's policies.
+    If it's safe, return "SAFE".
+    If there is a potential issue, return a short explanation.
+
+    Title: {title}
+    Description: {description}
+    """
+
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=100
+        )
+        result = response["choices"][0]["message"]["content"]
+
+        if "SAFE" in result:
+            print("✅ Metadata is safe.")
+            return True
+        else:
+            print(f"⚠ Potential policy issue detected: {result}")
+            return False
+    except Exception as e:
+        print("❌ Error checking YouTube policy:", str(e))
+        return True
+
+# بررسی قبل از آپلود
+if video_metadata and check_youtube_policy(video_metadata["title"], video_metadata["description"]):
+    upload_video(enhanced_video, video_id)
+else:
+    print("❌ Video upload blocked due to policy violation.")
+
+def check_audio_copyright(audio_file):
+    """
+    بررسی اینکه آیا موسیقی یا صداگذاری استفاده شده کپی‌رایت دارد یا خیر.
+    """
+    prompt = f"""
+    Please analyze the following audio file and determine if it contains copyrighted music or speech.
+    If it's safe, return "SAFE".
+    If there is a potential copyright issue, return a short explanation.
+
+    Audio file: {audio_file}
+    """
+
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=100
+        )
+        result = response["choices"][0]["message"]["content"]
+
+        if "SAFE" in result:
+            print("✅ Audio is safe.")
+            return True
+        else:
+            print(f"⚠ Potential copyright issue detected: {result}")
+            return False
+    except Exception as e:
+        print("❌ Error checking audio copyright:", str(e))
+        return True
+
+# بررسی قبل از اضافه کردن موسیقی یا صداگذاری
+if check_audio_copyright("voiceover.mp3"):
+    enhanced_voiceover = enhance_audio("voiceover.mp3")
+else:
+    print("❌ Audio rejected due to potential copyright violation.")
+
+def check_video_content(video_file):
+    """
+    بررسی محتوای ویدیو برای محتوای حساس یا ممنوعه.
+    """
+    prompt = f"""
+    Please analyze the following video file and determine if it contains sensitive, inappropriate, or copyrighted content.
+    If it's safe, return "SAFE".
+    If there is a potential issue, return a short explanation.
+
+    Video file: {video_file}
+    """
+
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=100
+        )
+        result = response["choices"][0]["message"]["content"]
+
+        if "SAFE" in result:
+            print("✅ Video content is safe.")
+            return True
+        else:
+            print(f"⚠ Potential issue detected: {result}")
+            return False
+    except Exception as e:
+        print("❌ Error checking video content:", str(e))
+        return True
+
+# بررسی قبل از آپلود ویدیو
+if check_video_content("final_video.mp4"):
+    upload_video(enhanced_video, video_id)
+else:
+    print("❌ Video upload blocked due to potential violation.")
 
 # بررسی اینکه امروز چند ویدیو آپلود شده
 def check_upload_limit():
