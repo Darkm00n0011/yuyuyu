@@ -70,7 +70,7 @@ def upload_metadata(title, description, category_id=24, privacy_status="public")
         "snippet": {
             "title": title,
             "description": description,
-            "categoryId": int(category_id)  # Ensure categoryId is int
+            "categoryId": category_id  # Ensure categoryId is int
         },
         "status": {
             "privacyStatus": privacy_status
@@ -129,4 +129,8 @@ if __name__ == "__main__":
         print("Valid Categories:", json.dumps(categories, indent=2))
 
         # Upload metadata and video
-        video_id = upload_metadata("Test Video")
+        video_id = upload_metadata("Test Video", "This is an automated upload.", category_id=24, privacy_status="public")
+        if video_id:
+            upload_video("video.mp4", video_id)
+    except Exception as e:
+        print("An error occurred:", str(e))
