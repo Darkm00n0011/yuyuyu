@@ -31,7 +31,7 @@ def upload_metadata(title, description, category_id="22", privacy_status="public
     
     headers = {
         "Authorization": f"Bearer {access_token}",
-        "Content-Type": "multipart/related; boundary=foo_bar_baz"
+        "Content-Type": "application/json"
     }
     
     params = {"part": "snippet,status"}
@@ -47,16 +47,7 @@ def upload_metadata(title, description, category_id="22", privacy_status="public
         }
     }
     
-    # ایجاد فرمت صحیح برای multipart
-    metadata_str = json.dumps(metadata)
-    body = (
-        "--foo_bar_baz\r\n"
-        "Content-Type: application/json; charset=UTF-8\r\n\r\n"
-        f"{metadata_str}\r\n"
-        "--foo_bar_baz--"
-    )
-    
-    metadata_response = requests.post(UPLOAD_URL, headers=headers, params=params, data=body)
+    metadata_response = requests.post(UPLOAD_URL, headers=headers, params=params, json=metadata)
     metadata_response_json = metadata_response.json()
     
     if "id" not in metadata_response_json:
