@@ -30,7 +30,7 @@ def get_access_token():
 def upload_metadata(title, description, category_id=24, privacy_status="public"):
     access_token = get_access_token()
     
-    # اطمینان از مقدار صحیح privacyStatus
+    # Ensure privacy_status is valid
     if privacy_status not in ["public", "private", "unlisted"]:
         privacy_status = "public"
 
@@ -73,7 +73,7 @@ def upload_video(video_file, video_id):
     }
     
     init_request = requests.post(
-        f"{UPLOAD_URL}?uploadType=resumable&part=snippet,status&id={video_id}",
+        f"{UPLOAD_URL}?uploadType=resumable&part=snippet,status",
         headers=headers
     )
     
