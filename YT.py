@@ -109,4 +109,4 @@ def upload_video(video_file, video_id):
 
     upload_url = init_request.headers.get("Location")
     if not upload_url:
-        print("Failed to retrieve upload URL
+        print("Failed to retrieve upload URL")
