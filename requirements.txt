@@ -3,3 +3,12 @@ google-auth
 google-auth-oauthlib
 google-auth-httplib2
 pytz
+openai
+numpy
+pydub
+opencv-python
+moviepy
+pillow
+flask
+gunicorn
+pytrends
