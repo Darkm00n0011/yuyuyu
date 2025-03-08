@@ -9,6 +9,7 @@ REFRESH_TOKEN = os.getenv("REFRESH_TOKEN")
 
 # YouTube API URLs
 TOKEN_URL = "https://oauth2.googleapis.com/token"
+METADATA_URL = "https://www.googleapis.com/youtube/v3/videos"
 UPLOAD_URL = "https://www.googleapis.com/upload/youtube/v3/videos"
 
 # Function to get new access token
@@ -47,7 +48,7 @@ def upload_metadata(title, description, category_id="22", privacy_status="public
         }
     }
     
-    metadata_response = requests.post(UPLOAD_URL, headers=headers, params=params, json=metadata)
+    metadata_response = requests.post(METADATA_URL, headers=headers, params=params, json=metadata)
     metadata_response_json = metadata_response.json()
     
     if "id" not in metadata_response_json:
