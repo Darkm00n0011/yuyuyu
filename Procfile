@@ -1,1 +1,1 @@
-web: python YT.py
+web: gunicorn --bind 0.0.0.0:8080 YT:app
