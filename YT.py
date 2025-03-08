@@ -38,6 +38,9 @@ def get_video_categories():
         "regionCode": "US"  # Change to your region if needed
     }
     response = requests.get("https://www.googleapis.com/youtube/v3/videoCategories", headers=headers, params=params)
+    if response.status_code != 200:
+        print("Error fetching video categories:", response.json())
+        return None
     return response.json()
 
 # Function to upload metadata and get video ID
@@ -126,7 +129,8 @@ if __name__ == "__main__":
     try:
         # Get valid categories (optional, for debugging)
         categories = get_video_categories()
-        print("Valid Categories:", json.dumps(categories, indent=2))
+        if categories:
+            print("Valid Categories:", json.dumps(categories, indent=2))
 
         # Upload metadata and video
         video_id = upload_metadata("Test Video", "This is an automated upload.", category_id=24, privacy_status="public")
