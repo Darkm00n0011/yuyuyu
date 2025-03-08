@@ -27,7 +27,7 @@ def get_access_token():
     return response_json.get("access_token")
 
 # Function to upload metadata and get video ID
-def upload_metadata(title, description, category_id="22", privacy_status="public"):
+def upload_metadata(title, description, category_id="24", privacy_status="public"):
     access_token = get_access_token()
     
     headers = {
@@ -41,7 +41,7 @@ def upload_metadata(title, description, category_id="22", privacy_status="public
         "snippet": {
             "title": title,
             "description": description,
-            "categoryId": category_id
+            "categoryId": str(category_id)
         },
         "status": {
             "privacyStatus": privacy_status
