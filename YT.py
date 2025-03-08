@@ -46,6 +46,7 @@ def upload_metadata(title, description, category_id=24, privacy_status="public")
 
     # Validate privacyStatus
     if privacy_status not in ["public", "private", "unlisted"]:
+        print(f"Invalid privacy status: {privacy_status}. Defaulting to 'public'.")
         privacy_status = "public"
 
     # Validate title and description
@@ -53,6 +54,10 @@ def upload_metadata(title, description, category_id=24, privacy_status="public")
         raise ValueError("Title must be between 1 and 100 characters.")
     if not description or len(description) > 5000:
         raise ValueError("Description must be less than 5000 characters.")
+
+    # Validate category_id
+    if not isinstance(category_id, int) or category_id <= 0:
+        raise ValueError("category_id must be a positive integer.")
 
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -71,6 +76,9 @@ def upload_metadata(title, description, category_id=24, privacy_status="public")
             "privacyStatus": privacy_status
         }
     }
+
+    print("Uploading metadata with the following parameters:")
+    print(json.dumps(metadata, indent=2))  # Log the metadata being sent
 
     metadata_response = requests.post(METADATA_URL, headers=headers, params=params, json=metadata)
     
@@ -117,11 +125,7 @@ if __name__ == "__main__":
     try:
         # Get valid categories (optional, for debugging)
         categories = get_video_categories()
-        print("Valid Categories:", categories)
+        print("Valid Categories:", json.dumps(categories, indent=2))
 
         # Upload metadata and video
-        video_id = upload_metadata("Test Video", "This is an automated upload.", category_id=24, privacy_status="public")
-        if video_id:
-            upload_video("video.mp4", video_id)
-    except Exception as e:
-        print("An error occurred:", e)
+        video_id = upload_metadata("Test Video", "This is an automated upload.", category_id=24, privacy_status="public
