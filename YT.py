@@ -22,9 +22,23 @@ def get_access_token():
     }
     response = requests.post(TOKEN_URL, data=data)
     response_json = response.json()
-    if "access_token" not in response_json:
+    if response.status_code != 200 or "access_token" not in response_json:
         raise Exception("Failed to get access token: " + str(response_json))
     return response_json.get("access_token")
+
+# Function to get valid video categories
+def get_video_categories():
+    access_token = get_access_token()
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+    params = {
+        "part": "snippet",
+        "regionCode": "US"  # Change to your region if needed
+    }
+    response = requests.get("https://www.googleapis.com/youtube/v3/videoCategories", headers=headers, params=params)
+    return response.json()
 
 # Function to upload metadata and get video ID
 def upload_metadata(title, description, category_id=24, privacy_status="public"):
@@ -33,6 +47,12 @@ def upload_metadata(title, description, category_id=24, privacy_status="public")
     # Validate privacyStatus
     if privacy_status not in ["public", "private", "unlisted"]:
         privacy_status = "public"
+
+    # Validate title and description
+    if not title or len(title) > 100:
+        raise ValueError("Title must be between 1 and 100 characters.")
+    if not description or len(description) > 5000:
+        raise ValueError("Description must be less than 5000 characters.")
 
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -45,7 +65,7 @@ def upload_metadata(title, description, category_id=24, privacy_status="public")
         "snippet": {
             "title": title,
             "description": description,
-            "categoryId": category_id  # Ensure categoryId is int
+            "categoryId": int(category_id)  # Ensure categoryId is int
         },
         "status": {
             "privacyStatus": privacy_status
@@ -53,13 +73,12 @@ def upload_metadata(title, description, category_id=24, privacy_status="public")
     }
 
     metadata_response = requests.post(METADATA_URL, headers=headers, params=params, json=metadata)
-    metadata_response_json = metadata_response.json()
-
-    if "id" not in metadata_response_json:
-        print("Error uploading metadata:", metadata_response_json)
+    
+    if metadata_response.status_code != 200:
+        print("Error uploading metadata:", metadata_response.json())
         return None
 
-    return metadata_response_json["id"]
+    return metadata_response.json().get("id")
 
 # Function to upload video using resumable upload
 def upload_video(video_file, video_id):
@@ -95,6 +114,14 @@ def upload_video(video_file, video_id):
 
 # Example usage
 if __name__ == "__main__":
-    video_id = upload_metadata("Test Video", "This is an automated upload.")
-    if video_id:
-        upload_video("video.mp4", video_id)
+    try:
+        # Get valid categories (optional, for debugging)
+        categories = get_video_categories()
+        print("Valid Categories:", categories)
+
+        # Upload metadata and video
+        video_id = upload_metadata("Test Video", "This is an automated upload.", category_id=24, privacy_status="public")
+        if video_id:
+            upload_video("video.mp4", video_id)
+    except Exception as e:
+        print("An error occurred:", e)
