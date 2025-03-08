@@ -1,24 +1,17 @@
-# استفاده از نسخه جدیدتر پایتون
-FROM python:3.10
+# Use an official Python runtime as a parent image
+FROM python:3.9
 
-# تنظیم دایرکتوری کاری در کانتینر
+# Set the working directory in the container
 WORKDIR /app
 
-# نصب پیش‌نیازهای سیستمی
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    libsm6 \
-    libxext6 \
-    && rm -rf /var/lib/apt/lists/*
-
-# کپی کردن فایل‌های پروژه به کانتینر
+# Copy the current directory contents into the container at /app
 COPY . /app
 
-# نصب پکیج‌های موردنیاز
-RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
+# Install system dependencies
+RUN apt-get update && apt-get install -y ffmpeg
 
-RUN pip install moviepy
+# Install any needed packages specified in requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-
-# اجرای برنامه
+# Command to run the application
 CMD ["python", "YT.py"]
