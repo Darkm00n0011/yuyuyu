@@ -1,4 +1,4 @@
-import os
+iimport os
 import requests
 import json
 
@@ -109,23 +109,4 @@ def upload_video(video_file, video_id):
 
     upload_url = init_request.headers.get("Location")
     if not upload_url:
-        print("Failed to retrieve upload URL")
-        return
-
-    with open(video_file, "rb") as file:
-        upload_response = requests.put(upload_url, headers={
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "video/mp4"
-        }, data=file)
-
-    print("Upload response:", upload_response.json())
-
-# Example usage
-if __name__ == "__main__":
-    try:
-        # Get valid categories (optional, for debugging)
-        categories = get_video_categories()
-        print("Valid Categories:", json.dumps(categories, indent=2))
-
-        # Upload metadata and video
-        video_id = upload_metadata("Test Video", "This is an automated upload.", category_id=24, privacy_status="public
+        print("Failed to retrieve upload URL
