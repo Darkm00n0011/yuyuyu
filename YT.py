@@ -1,140 +1,80 @@
 import os
 import requests
 import json
+from datetime import datetime
+import pytz
 
-# Load environment variables from Railway
-CLIENT_ID = os.getenv("CLIENT_ID")
-CLIENT_SECRET = os.getenv("CLIENT_SECRET")
-REFRESH_TOKEN = os.getenv("REFRESH_TOKEN")
+# تنظیم منطقه زمانی به Eastern Time (ET)
+EST = pytz.timezone('America/New_York')
 
-# YouTube API URLs
-TOKEN_URL = "https://oauth2.googleapis.com/token"
-METADATA_URL = "https://www.googleapis.com/youtube/v3/videos"
-UPLOAD_URL = "https://www.googleapis.com/upload/youtube/v3/videos"
+# فایل لاگ برای ذخیره تاریخ آخرین آپلود
+UPLOAD_LOG_FILE = "upload_log.json"
 
-# Function to get new access token
-def get_access_token():
-    data = {
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "refresh_token": REFRESH_TOKEN,
-        "grant_type": "refresh_token"
-    }
-    response = requests.post(TOKEN_URL, data=data)
-    response_json = response.json()
-    if response.status_code != 200 or "access_token" not in response_json:
-        raise Exception("Failed to get access token: " + str(response_json))
-    return response_json.get("access_token")
+# مسیر ویدیوها (نام فایل‌ها را با ویدیوهای واقعی جایگزین کن)
+LONG_VIDEO_FILE = "long_video.mp4"  # ویدیوی 5 تا 10 دقیقه‌ای
+SHORT_VIDEO_FILE = "short_video.mp4"  # ویدیوی Shorts
 
-# Function to get valid video categories
-def get_video_categories():
-    access_token = get_access_token()
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json"
-    }
-    params = {
-        "part": "snippet",
-        "regionCode": "US"  # Change to your region if needed
-    }
-    response = requests.get("https://www.googleapis.com/youtube/v3/videoCategories", headers=headers, params=params)
-    if response.status_code != 200:
-        print("Error fetching video categories:", response.json())
-        return None
-    return response.json()
+# تعداد آپلودها در روز
+MAX_LONG_UPLOADS = 1  # فقط 1 ویدیوی بلند در روز
+MAX_SHORTS_UPLOADS = 1  # فقط 1 Shorts در روز
 
-# Function to upload metadata and get video ID
-def upload_metadata(title, description, category_id=24, privacy_status="public"):
-    access_token = get_access_token()
+# بررسی اینکه امروز چند ویدیو آپلود شده
+def check_upload_limit():
+    today = datetime.now(EST).strftime('%Y-%m-%d')
 
-    # Validate privacyStatus
-    if privacy_status not in ["public", "private", "unlisted"]:
-        print(f"Invalid privacy status: {privacy_status}. Defaulting to 'public'.")
-        privacy_status = "public"
+    # اگر فایل لاگ وجود نداشت، بساز
+    if not os.path.exists(UPLOAD_LOG_FILE):
+        with open(UPLOAD_LOG_FILE, "w") as file:
+            json.dump({"date": today, "long_videos": 0, "shorts": 0}, file)
 
-    # Validate title and description
-    if not title or len(title) > 100:
-        raise ValueError("Title must be between 1 and 100 characters.")
-    if not description or len(description) > 5000:
-        raise ValueError("Description must be less than 5000 characters.")
+    # مقدار آپلودهای قبلی را بخوان
+    with open(UPLOAD_LOG_FILE, "r") as file:
+        data = json.load(file)
 
-    # Validate category_id
-    if not isinstance(category_id, int) or category_id <= 0:
-        raise ValueError("category_id must be a positive integer.")
+    # اگر تاریخ تغییر کرده، لاگ را ریست کن
+    if data["date"] != today:
+        data = {"date": today, "long_videos": 0, "shorts": 0}
 
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json"
-    }
+    return data
 
-    params = {"part": "snippet,status"}
+# ذخیره‌ی تعداد آپلودها
+def log_upload(video_type):
+    data = check_upload_limit()
+    data[video_type] += 1  # تعداد آپلودهای نوع موردنظر را افزایش بده
 
-    metadata = {
-        "snippet": {
-            "title": title,
-            "description": description,
-            "categoryId": category_id  # Ensure categoryId is int
-        },
-        "status": {
-            "privacyStatus": privacy_status
-        }
-    }
+    with open(UPLOAD_LOG_FILE, "w") as file:
+        json.dump(data, file)
 
-    print("Uploading metadata with the following parameters:")
-    print(json.dumps(metadata, indent=2))  # Log the metadata being sent
+# بررسی ساعت مجاز برای آپلود
+def get_upload_type():
+    now = datetime.now(EST)
+    hour = now.hour
 
-    metadata_response = requests.post(METADATA_URL, headers=headers, params=params, json=metadata)
-    
-    if metadata_response.status_code != 200:
-        print("Error uploading metadata:", metadata_response.json())
-        return None
+    if 7 <= hour <= 9:
+        return "long_videos"  # زمان آپلود ویدیوی بلند
+    elif 11 <= hour <= 15:
+        return "shorts"  # زمان آپلود Shorts
+    return None
 
-    return metadata_response.json().get("id")
-
-# Function to upload video using resumable upload
-def upload_video(video_file, video_id):
-    access_token = get_access_token()
-
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "X-Upload-Content-Type": "video/mp4",
-        "X-Upload-Content-Length": str(os.path.getsize(video_file))
-    }
-
-    init_request = requests.post(
-        f"{UPLOAD_URL}?uploadType=resumable&part=snippet,status",
-        headers=headers
-    )
-
-    if init_request.status_code != 200:
-        print("Error initializing upload:", init_request.json())
-        return
-
-    upload_url = init_request.headers.get("Location")
-    if not upload_url:
-        print("Failed to retrieve upload URL")
-        return
-
-    with open(video_file, "rb") as file:
-        upload_response = requests.put(upload_url, headers={
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "video/mp4"
-        }, data=file)
-
-    print("Upload response:", upload_response.json())
-
-# Example usage
+# اجرای آپلود در زمان مناسب
 if __name__ == "__main__":
     print("Starting the YouTube Auto-Upload Bot...")
-    try:
-        # Get valid categories (optional, for debugging)
-        categories = get_video_categories()
-        if categories:
-            print("Valid Categories:", json.dumps(categories, indent=2))
 
-        # Upload metadata and video
-        video_id = upload_metadata("Test Video", "This is an automated upload.", category_id=24, privacy_status="public")
-        if video_id:
-            upload_video("video.mp4", video_id)
-    except Exception as e:
-        print("An error occurred:", str(e))
+    upload_type = get_upload_type()
+    upload_limits = check_upload_limit()
+
+    if upload_type and upload_limits[upload_type] < (MAX_LONG_UPLOADS if upload_type == "long_videos" else MAX_SHORTS_UPLOADS):
+        print(f"✅ It's time to upload a {upload_type.replace('_', ' ')}. Proceeding with upload.")
+
+        try:
+            video_file = LONG_VIDEO_FILE if upload_type == "long_videos" else SHORT_VIDEO_FILE
+            category_id = 20  # دسته‌بندی Gaming
+
+            video_id = upload_metadata("CreeperClues - New Video!", "Enjoy some cool Minecraft facts!", category_id, "public")
+            if video_id:
+                upload_video(video_file, video_id)
+                log_upload(upload_type)  # ثبت آپلود در لاگ
+        except Exception as e:
+            print("An error occurred:", str(e))
+    else:
+        print("⏳ Either it's not the right time for upload or today's upload limit has been reached.")
