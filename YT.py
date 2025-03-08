@@ -4,14 +4,23 @@ import json
 import pytz
 import collections
 import openai
+import subprocess
+import cv2
+import numpy as np
 from datetime import datetime
 from pytrends.request import TrendReq
-
+from pydub import AudioSegment
+from pydub.effects import normalize
+from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
+from moviepy.video.fx import fadein, fadeout
+from PIL import Image, ImageDraw, ImageFont
 # Load environment variables from Railway
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 REFRESH_TOKEN = os.getenv("REFRESH_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+VOICE_ID = "EXAVITQu4vr4xnSDxMaL"  # می‌تونی آی‌دی صدای مورد علاقه‌ات رو جایگزین کنی
 
 # YouTube API URLs
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -74,12 +83,18 @@ def fetch_google_trends():
     """
     دریافت لیست ترندهای روز از Google Trends
     """
-    pytrends = TrendReq(hl='en-US', tz=360)  # مقداردهی اولیه API گوگل ترندز
+    pytrends = TrendReq(hl='en-US', tz=360)  
     pytrends.build_payload(kw_list=["Minecraft", "AI", "Technology"], timeframe="now 1-d", geo="US")  
-    trending_searches = pytrends.trending_searches(pn="united_states")  # دریافت ترندهای روز
     
-    trends = trending_searches[0].tolist()  # تبدیل به لیست رشته‌ای
+    trending_searches = pytrends.trending_searches(pn="united_states")
+    
+    if trending_searches is not None and not trending_searches.empty:
+        trends = trending_searches[0].tolist()
+    else:
+        trends = []
+
     return [{"title": trend, "source": "Google Trends"} for trend in trends]
+
 
 def fetch_reddit_trends(subreddit="gaming", limit=10):
     """
@@ -179,6 +194,294 @@ def generate_video_script(topic):
     except Exception as e:
         print("❌ Error generating script:", str(e))
         return None
+
+def generate_video(voiceover, background_video, output_video="final_video.mp4"):
+    """
+    ترکیب پس‌زمینه‌ی ماینکرفت، صداگذاری، و اضافه کردن زیرنویس
+    """
+    try:
+        # ترکیب ویدیو و صدا
+        command = f"ffmpeg -i {background_video} -i {voiceover} -c:v copy -c:a aac {output_video}"
+        subprocess.run(command, shell=True, check=True)
+        print("✅ Video generated successfully!")
+        return output_video
+    except Exception as e:
+        print("❌ Error generating video:", str(e))
+        return None
+
+def generate_subtitles(audio_file, output_srt="subtitles.srt"):
+    """
+    تولید زیرنویس هماهنگ با صدا با استفاده از Whisper AI
+    """
+    try:
+        response = openai.Audio.transcribe("whisper-1", audio_file)
+        subtitles = response["text"]
+
+        with open(output_srt, "w") as srt_file:
+            srt_file.write(subtitles)
+
+        print("✅ Subtitles generated successfully!")
+        return output_srt
+    except Exception as e:
+        print("❌ Error generating subtitles:", str(e))
+        return None
+
+
+def generate_voiceover(script, output_audio="voiceover.mp3"):
+    """
+    تولید صداگذاری از متن با استفاده از ElevenLabs API
+    """
+    if not ELEVENLABS_API_KEY:
+        print("❌ ERROR: ElevenLabs API key is missing!")
+        return None
+
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}"
+    headers = {
+        "Content-Type": "application/json",
+        "xi-api-key": ELEVENLABS_API_KEY
+    }
+    payload = {
+        "text": script,
+        "model_id": "eleven_monolingual_v1",
+        "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.8
+        }
+    }
+
+    response = requests.post(url, headers=headers, json=payload)
+    if response.status_code == 200:
+        with open(output_audio, "wb") as f:
+            f.write(response.content)
+        print("✅ Voiceover generated successfully!")
+        return output_audio
+    else:
+        print(f"❌ Error generating voiceover: {response.json()}")
+        return None
+
+def enhance_audio(input_audio, output_audio="enhanced_voiceover.mp3"):
+    """
+    پردازش و بهینه‌سازی صدای گوینده، حذف نویز و اضافه کردن افکت‌های صوتی
+    """
+    print("🎧 Enhancing voiceover...")
+
+    # بارگذاری فایل صوتی
+    audio = AudioSegment.from_file(input_audio)
+
+    # **حذف نویز و نرمال‌سازی صدا**
+    enhanced_audio = normalize(audio)
+
+    # **افزودن افکت صوتی کلیک در ابتدای ویدیو**
+    click_sound = AudioSegment.from_file("sounds/click.mp3")
+if os.path.exists("sounds/click.mp3"):
+    click_sound = AudioSegment.from_file("sounds/click.mp3")
+    enhanced_audio = click_sound + enhanced_audio
+else:
+    print("⚠ Click sound not found, continuing without it.")
+
+    enhanced_audio = click_sound + enhanced_audio
+
+    # ذخیره‌ی نسخه‌ی بهینه‌شده
+    enhanced_audio.export(output_audio, format="mp3")
+    
+    print(f"✅ Voiceover enhanced and saved as {output_audio}")
+    return output_audio
+
+def enhance_video(input_video, output_video="enhanced_video.mp4"):
+    """
+    بهبود ویدیو با افزودن ترنزیشن‌ها، افکت‌های گرافیکی و متن
+    """
+    print("🎬 Enhancing video with effects...")
+
+    # بارگذاری ویدیو
+    clip = VideoFileClip(input_video)
+
+    # **افزودن افکت فید-این و فید-اوت (ورود و خروج نرم)**
+    clip = fadein.fadein(clip, 1).fx(fadeout.fadeout, 1)
+
+    # **ایجاد متن عنوان برای ویدیو**
+    title_text = TextClip("🔥 CreeperClues - Minecraft Facts!", fontsize=70, color="white", font="Arial-Bold")
+    title_text = title_text.set_position(("center", "top")).set_duration(3)
+
+    # **ترکیب متن با ویدیو**
+    final_clip = CompositeVideoClip([clip, title_text])
+
+    # ذخیره‌ی ویدیوی بهینه‌شده
+    final_clip.write_videofile(output_video, codec="libx264", fps=30)
+
+    print(f"✅ Video enhanced and saved as {output_video}")
+    return output_video
+
+def add_video_effects(input_video, output_video="final_video_with_effects.mp4"):
+    """
+    اضافه کردن افکت‌های تصویری، ترنزیشن‌ها و متن‌های گرافیکی به ویدیو
+    """
+    print("🎬 Adding effects to video...")
+
+    # بارگذاری ویدیو اصلی
+    clip = VideoFileClip(input_video)
+
+    # ایجاد متن گرافیکی متحرک
+    txt_clip = TextClip("🔥 Amazing Minecraft Fact!", fontsize=80, color='yellow', font="Impact-Bold")
+    txt_clip = txt_clip.set_position(("center", "top")).set_duration(3)  # نمایش برای ۳ ثانیه
+
+    # ترکیب ویدیو و متن
+    final = CompositeVideoClip([clip, txt_clip])
+
+    # ذخیره ویدیو
+    final.write_videofile(output_video, codec="libx264", fps=30)
+    print(f"✅ Video with effects saved as {output_video}")
+    return output_video
+
+def generate_thumbnail(topic, output_file="thumbnail.png"):
+    """
+    تولید تامبنیل جذاب برای ویدیو، ابتدا با DALL·E، و در صورت خطا، با یک تصویر پیش‌فرض.
+    """
+    print("🖼 Generating thumbnail...")
+
+    # تلاش برای تولید تصویر با DALL·E
+    try:
+        response = openai.Image.create(
+            model="dall-e-3",
+            prompt=f"Create a high-quality YouTube thumbnail for a video about {topic}. It should be colorful, eye-catching, and engaging.",
+            n=1,
+            size="1024x1024"
+        )
+
+        if "data" in response and response["data"]:
+            image_url = response["data"][0]["url"]
+            if image_url:
+                img = Image.open(requests.get(image_url, stream=True).raw)
+                print("✅ Thumbnail generated using DALL·E!")
+            else:
+                raise Exception("DALL·E did not return a valid image URL.")
+        else:
+            raise Exception("DALL·E API returned an empty response.")
+
+    except Exception as e:
+        print(f"⚠ DALL·E failed: {e}")
+        print("🖼 Using default background for thumbnail...")
+        img = Image.open("thumbnail_bg.jpg").resize((1280, 720))
+
+    # ایجاد متن روی تصویر
+    draw = ImageDraw.Draw(img)
+    font = ImageFont.truetype("impact.ttf", 90)
+    text_position = (100, 550)
+
+    # افکت استروک برای خوانایی بهتر
+    for offset in range(-3, 4, 2):
+        draw.text((text_position[0] + offset, text_position[1]), topic, font=font, fill="black")
+        draw.text((text_position[0], text_position[1] + offset), topic, font=font, fill="black")
+
+    draw.text(text_position, topic, font=font, fill="yellow")
+
+    # ذخیره‌ی تصویر نهایی
+    img.save(output_file)
+    print(f"✅ Thumbnail saved as {output_file}")
+    return output_file
+
+
+def generate_video_metadata(topic):
+    """
+    تولید عنوان، توضیحات و هشتگ‌های بهینه‌شده برای یوتیوب.
+    """
+    print("📝 Generating video metadata...")
+
+    prompt = f"""
+    Generate an engaging YouTube video title, description, and relevant hashtags for a video about {topic}.
+    
+    - The title should be eye-catching and optimized for high CTR.
+    - The description should include a short summary of the video, a call to action, and links.
+    - The hashtags should be relevant and increase discoverability.
+    
+    Return the output in JSON format.
+    """
+
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=250
+        )
+        
+        content = response["choices"][0]["message"]["content"]
+        try:
+            metadata = json.loads(content)  # تلاش برای تبدیل JSON
+        except json.JSONDecodeError:
+            print("⚠ Warning: Invalid JSON received from OpenAI. Using default metadata.")
+            metadata = {
+                "title": f"Awesome Video About {topic}!",
+                "description": f"This video is all about {topic}. Stay tuned for more!",
+                "hashtags": "#YouTube #Trending"
+            }
+
+        print("✅ Video metadata generated successfully!")
+        return metadata
+    except Exception as e:
+        print("❌ Error generating metadata:", str(e))
+        return None
+
+def analyze_past_videos():
+    """
+    تحلیل داده‌های عملکرد ویدیوهای قبلی و بهینه‌سازی استراتژی محتوا.
+    """
+    analytics_file = "video_analytics.json"
+
+    if not os.path.exists(analytics_file):
+        print("⚠ No past video analytics found.")
+        return None
+
+    with open(analytics_file, "r") as file:
+        try:
+            data = json.load(file)
+            if not isinstance(data, dict):
+                print("⚠ Invalid analytics data format.")
+                return None
+        except json.JSONDecodeError:
+            print("⚠ Error reading analytics file.")
+            return None
+
+    best_videos = sorted(
+        [(vid, stats) for vid, stats in data.items() if "engagement_rate" in stats],
+        key=lambda x: x[1]["engagement_rate"],
+        reverse=True
+    )
+
+    if not best_videos:
+        print("⚠ No valid engagement data found.")
+        return None
+
+    print("\n📊 **Top Performing Videos:**")
+    for video_id, stats in best_videos[:5]:
+        print(f"- Video ID: {video_id}, Engagement Rate: {stats['engagement_rate']:.2%}")
+
+    return best_videos
+
+def suggest_improvements():
+    """
+    پیشنهاد بهینه‌سازی استراتژی ویدیو بر اساس ویدیوهای موفق قبلی.
+    """
+    best_videos = analyze_past_videos()
+    
+    if not best_videos:
+        print("⚠ Not enough data to suggest improvements.")
+        return
+
+    engagement_rates = [vid[1]["engagement_rate"] for vid in best_videos]
+    avg_engagement = sum(engagement_rates) / len(engagement_rates) if engagement_rates else 0
+
+    print(f"\n📊 **Average Engagement Rate:** {avg_engagement:.2%}")
+
+    if avg_engagement < 0.03:
+        print("⚠ Engagement rate is low. Consider experimenting with different topics and styles.")
+    else:
+        print("\n🎯 **Suggested Video Strategies Based on Past Success:**")
+        print("- Use more engaging hooks in the first 5 seconds.")
+        print("- Focus on topics similar to high-performing videos.")
+        print("- Encourage more comments by asking interactive questions.")
+        print("- Test different thumbnail styles (e.g., bold text, bright colors).")
+
+
 
 # بررسی اینکه امروز چند ویدیو آپلود شده
 def check_upload_limit():
@@ -283,46 +586,98 @@ def upload_video(video_file, video_id):
     print("Upload response:", upload_response.json())
 
 # اجرای آپلود در زمان مناسب
-
 if __name__ == "__main__":
-    print("Starting the YouTube Auto-Upload Bot...")
+    print("🚀 Starting the YouTube Auto-Upload Bot...")
 
-    # 1️⃣ دریافت ترندهای یوتیوب
-    fetch_youtube_trending()  # دریافت موضوعات پرطرفدار و ذخیره در trending_topics.json
+    # 1️⃣ تحلیل ویدیوهای قبلی و ارائه پیشنهادات برای بهینه‌سازی
+    suggest_improvements()
 
-    # 1️⃣ دریافت و ذخیره‌ی ترندهای مختلف در `trending_topics.json`
+    # 2️⃣ دریافت و ذخیره‌ی ترندهای مختلف در `trending_topics.json`
     fetch_all_trends()
 
-# 2️⃣ تحلیل داده‌های ترند و انتخاب بهترین موضوع
+    # 3️⃣ تحلیل داده‌های ترند و انتخاب بهترین موضوع
     selected_topic = select_best_trending_topic()
-    if selected_topic:
-        print(f"🔥 The system will generate a video on: {selected_topic}")
-    else:
+    if not selected_topic:
         print("⚠ No suitable topic found, skipping video creation.")
+        exit()  # اگر موضوع مناسبی پیدا نشود، اجرا متوقف می‌شود.
 
-# 3️⃣ تولید متن ویدیوی جذاب با GPT
-        script = generate_video_script(selected_topic)
-        if script:
-            with open("video_script.txt", "w") as file:
-                file.write(script)
-            print("📜 Video script saved successfully!")
-    else:
-        print("⚠ No suitable topic found, skipping video creation.")
+    print(f"🔥 Creating a video on: {selected_topic}")
 
-    # 2️⃣ ادامه اجرای برنامه طبق روال قبلی
+    # 4️⃣ تولید متن ویدیوی جذاب با GPT
+    script = generate_video_script(selected_topic)
+    if not script:
+        print("❌ Script generation failed. Skipping video creation.")
+        exit()
+
+    with open("video_script.txt", "w") as file:
+        file.write(script)
+    print("📜 Video script saved successfully!")
+
+    # 5️⃣ تولید صداگذاری از روی متن
+    voiceover = generate_voiceover(script)
+    if not voiceover:
+        print("❌ Voiceover generation failed. Skipping video creation.")
+        exit()
+
+    # 6️⃣ تولید زیرنویس
+    subtitles = generate_subtitles(voiceover)
+
+    # 7️⃣ تولید ویدیو نهایی
+    final_video = generate_video(voiceover, "minecraft_parkour.mp4")
+    if not final_video:
+        print("❌ Video generation failed.")
+        exit()
+
+    print(f"🎬 Video ready for editing: {final_video}")
+
+    # 8️⃣ بهینه‌سازی صدا و تصویر
+    enhanced_voiceover = enhance_audio(voiceover)  # حذف نویز و بهینه‌سازی
+    enhanced_video = enhance_video(final_video)  # افزودن افکت‌های گرافیکی
+
+    # 9️⃣ تولید تامبنیل برای ویدیو
+    thumbnail = generate_thumbnail(selected_topic)
+
+    # 🔟 اضافه کردن افکت‌های گرافیکی به ویدیو
+    final_video_with_effects = add_video_effects(enhanced_video)
+
+    # 📝 تولید متادیتای ویدیو
+    video_metadata = generate_video_metadata(selected_topic)
+    if not video_metadata:
+        video_metadata = {
+            "title": f"Awesome Video About {selected_topic}!",
+            "description": f"This video is all about {selected_topic}. Stay tuned for more!",
+            "hashtags": "#YouTube #Trending"
+        }
+
+    title = video_metadata["title"]
+    description = video_metadata["description"]
+    hashtags = video_metadata["hashtags"]
+
+    # 1️⃣1️⃣ آپلود متادیتای ویدیو و دریافت video_id
+    video_id = upload_metadata(title, description, category_id=20, privacy_status="public")
+    if not video_id:
+        print("❌ Failed to upload metadata, skipping video upload.")
+        exit()
+
+    # 1️⃣2️⃣ آپلود ویدیوی نهایی
+    upload_video(final_video_with_effects, video_id)
+
+    # 1️⃣3️⃣ بررسی محدودیت‌های آپلود و انجام آن در زمان مناسب
     upload_type = get_upload_type()
     upload_limits = check_upload_limit()
     
     if upload_type and upload_limits[upload_type] < (MAX_LONG_UPLOADS if upload_type == "long_videos" else MAX_SHORTS_UPLOADS):
         print(f"✅ It's time to upload a {upload_type.replace('_', ' ')}. Proceeding with upload.")
+
         try:
             video_file = LONG_VIDEO_FILE if upload_type == "long_videos" else SHORT_VIDEO_FILE
             category_id = 20  # دسته‌بندی Gaming
-            video_id = upload_metadata("CreeperClues - New Video!", "Enjoy some cool Minecraft facts!", category_id, "public")
+            video_id = upload_metadata(title, description, category_id, "public")
+            
             if video_id:
                 upload_video(video_file, video_id)
                 log_upload(upload_type)  # ثبت آپلود در لاگ
         except Exception as e:
-            print("An error occurred:", str(e))
+            print("❌ An error occurred:", str(e))
     else:
         print("⏳ Either it's not the right time for upload or today's upload limit has been reached.")
