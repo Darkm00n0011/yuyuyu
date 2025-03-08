@@ -1,13 +1,17 @@
 import os
 import requests
 import json
-from datetime import datetime
 import pytz
+import collections
+import openai
+from datetime import datetime
+from pytrends.request import TrendReq
 
 # Load environment variables from Railway
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 REFRESH_TOKEN = os.getenv("REFRESH_TOKEN")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # YouTube API URLs
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -27,6 +31,154 @@ SHORT_VIDEO_FILE = "short_video.mp4"  # ویدیوی Shorts
 # تعداد آپلودها در روز
 MAX_LONG_UPLOADS = 1  # فقط 1 ویدیوی بلند در روز
 MAX_SHORTS_UPLOADS = 1  # فقط 1 Shorts در روز
+
+def fetch_youtube_trending(region_code="US", max_results=10):
+    """
+    دریافت لیست ویدیوهای پرطرفدار یوتیوب و ذخیره در trending_topics.json
+    """
+    access_token = get_access_token()
+    
+    url = "https://www.googleapis.com/youtube/v3/videos"
+    params = {
+        "part": "snippet",
+        "chart": "mostPopular",
+        "regionCode": region_code,
+        "maxResults": max_results
+    }
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/json"
+    }
+
+    response = requests.get(url, headers=headers, params=params)
+    
+    if response.status_code != 200:
+        print("❌ Error fetching trending videos:", response.json())
+        return []
+
+    trending_videos = response.json().get("items", [])
+    trending_topics = []
+
+    for video in trending_videos:
+        title = video["snippet"]["title"]
+        description = video["snippet"]["description"]
+        trending_topics.append({"title": title, "description": description})
+
+    # ذخیره لیست در فایل JSON
+    with open("trending_topics.json", "w") as file:
+        json.dump(trending_topics, file, indent=2)
+
+    print(f"✅ {len(trending_topics)} trending topics saved in trending_topics.json")
+
+def fetch_google_trends():
+    """
+    دریافت لیست ترندهای روز از Google Trends
+    """
+    pytrends = TrendReq(hl='en-US', tz=360)  # مقداردهی اولیه API گوگل ترندز
+    pytrends.build_payload(kw_list=["Minecraft", "AI", "Technology"], timeframe="now 1-d", geo="US")  
+    trending_searches = pytrends.trending_searches(pn="united_states")  # دریافت ترندهای روز
+    
+    trends = trending_searches[0].tolist()  # تبدیل به لیست رشته‌ای
+    return [{"title": trend, "source": "Google Trends"} for trend in trends]
+
+def fetch_reddit_trends(subreddit="gaming", limit=10):
+    """
+    دریافت پست‌های ترند از Reddit
+    """
+    url = f"https://www.reddit.com/r/{subreddit}/top.json?t=day&limit={limit}"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200:
+        print("❌ Error fetching Reddit trends:", response.json())
+        return []
+
+    posts = response.json().get("data", {}).get("children", [])
+    reddit_trends = [{"title": post["data"]["title"], "source": "Reddit"} for post in posts]
+    return reddit_trends
+
+def fetch_all_trends():
+    """
+    دریافت و ترکیب داده‌های ترند از یوتیوب، گوگل ترندز، و ردیت
+    """
+    print("🔍 Fetching trending topics from multiple sources...")
+    
+    youtube_trends = fetch_youtube_trending()
+    google_trends = fetch_google_trends()
+    reddit_trends = fetch_reddit_trends()
+
+    all_trends = youtube_trends + google_trends + reddit_trends  # ترکیب داده‌های ترند
+    with open("trending_topics.json", "w") as file:
+        json.dump(all_trends, file, indent=2)
+
+    print(f"✅ {len(all_trends)} trending topics saved in trending_topics.json")
+
+def select_best_trending_topic():
+    """
+    تحلیل داده‌های ترند و انتخاب بهترین موضوع برای تولید ویدیو.
+    """
+    # بارگذاری داده‌ها از trending_topics.json
+    try:
+        with open("trending_topics.json", "r") as file:
+            trends = json.load(file)
+    except FileNotFoundError:
+        print("❌ Error: trending_topics.json not found.")
+        return None
+
+    if not trends:
+        print("❌ No trending topics found.")
+        return None
+
+    # شمارش میزان تکرار موضوعات در منابع مختلف
+    topic_count = collections.Counter([t["title"] for t in trends])
+
+    # مرتب‌سازی بر اساس بیشترین تکرار
+    sorted_topics = sorted(topic_count.items(), key=lambda x: x[1], reverse=True)
+
+    # انتخاب اولین موضوع که مرتبط با Minecraft, AI, یا Gaming باشد
+    keywords = ["minecraft", "gaming", "ai", "technology", "computers"]
+    for topic, count in sorted_topics:
+        if any(keyword in topic.lower() for keyword in keywords):
+            print(f"✅ Best topic selected: {topic} (Found in {count} sources)")
+            return topic
+
+    print("⚠ No suitable trending topic found.")
+    return None
+
+def generate_video_script(topic):
+    """
+    تولید یک متن ویدیوی جذاب با لحن عامیانه و پرانرژی.
+    """
+    prompt = f"""
+    Write a viral YouTube video script for the topic: {topic}. 
+    The script should be informal, fun, and engaging like a famous YouTuber. 
+    The tone should be energetic and natural, avoiding anything too formal or robotic.
+
+    Structure:
+    1️⃣ Hook (First 5-10 seconds) - Start with a shocking fact, an exciting question, or a crazy statement.
+    2️⃣ Main Content (70% of the video) - Explain the topic in a super fun and easy way, like talking to a friend.
+    3️⃣ Call to Action (Last 10 seconds) - Encourage viewers to like, comment, and subscribe in a way that feels natural.
+
+    Example:
+    - Hook: "Yo! Did you know there's a secret trick in Minecraft that lets you survive ANY fall?! Most players have NO idea about this!"
+    - Main Content: "So check this out... Normally, if you fall from a high place, you're DONE. But there's actually a trick where you can land on a ladder at the very last second and take ZERO damage! It's all about Minecraft physics, and it works EVERY time."
+    - Call to Action: "Try this in your next game and tell me in the comments if it worked! And hey, if you love Minecraft tricks like this, smash that like button so I know to drop more!"
+
+    Now, generate a script with this same fun, engaging style for the topic: {topic}.
+    """
+
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=500
+        )
+        script = response["choices"][0]["message"]["content"]
+        print("✅ Video script generated successfully!")
+        return script
+    except Exception as e:
+        print("❌ Error generating script:", str(e))
+        return None
 
 # بررسی اینکه امروز چند ویدیو آپلود شده
 def check_upload_limit():
@@ -131,10 +283,36 @@ def upload_video(video_file, video_id):
     print("Upload response:", upload_response.json())
 
 # اجرای آپلود در زمان مناسب
+
 if __name__ == "__main__":
     print("Starting the YouTube Auto-Upload Bot...")
+
+    # 1️⃣ دریافت ترندهای یوتیوب
+    fetch_youtube_trending()  # دریافت موضوعات پرطرفدار و ذخیره در trending_topics.json
+
+    # 1️⃣ دریافت و ذخیره‌ی ترندهای مختلف در `trending_topics.json`
+    fetch_all_trends()
+
+# 2️⃣ تحلیل داده‌های ترند و انتخاب بهترین موضوع
+    selected_topic = select_best_trending_topic()
+    if selected_topic:
+        print(f"🔥 The system will generate a video on: {selected_topic}")
+    else:
+        print("⚠ No suitable topic found, skipping video creation.")
+
+# 3️⃣ تولید متن ویدیوی جذاب با GPT
+        script = generate_video_script(selected_topic)
+        if script:
+            with open("video_script.txt", "w") as file:
+                file.write(script)
+            print("📜 Video script saved successfully!")
+    else:
+        print("⚠ No suitable topic found, skipping video creation.")
+
+    # 2️⃣ ادامه اجرای برنامه طبق روال قبلی
     upload_type = get_upload_type()
     upload_limits = check_upload_limit()
+    
     if upload_type and upload_limits[upload_type] < (MAX_LONG_UPLOADS if upload_type == "long_videos" else MAX_SHORTS_UPLOADS):
         print(f"✅ It's time to upload a {upload_type.replace('_', ' ')}. Proceeding with upload.")
         try:
