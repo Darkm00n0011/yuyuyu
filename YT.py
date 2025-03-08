@@ -27,9 +27,13 @@ def get_access_token():
     return response_json.get("access_token")
 
 # Function to upload metadata and get video ID
-def upload_metadata(title, description, category_id="24", privacy_status="public"):
+def upload_metadata(title, description, category_id=24, privacy_status="public"):
     access_token = get_access_token()
     
+    # اطمینان از مقدار صحیح privacyStatus
+    if privacy_status not in ["public", "private", "unlisted"]:
+        privacy_status = "public"
+
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json"
@@ -41,7 +45,8 @@ def upload_metadata(title, description, category_id="24", privacy_status="public
         "snippet": {
             "title": title,
             "description": description,
-            "categoryId": str(category_id)
+            "categoryId": str(category_id),
+            "defaultLanguage": "en"
         },
         "status": {
             "privacyStatus": privacy_status
