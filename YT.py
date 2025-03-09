@@ -162,32 +162,43 @@ def select_best_trending_topic():
     try:
         with open("trending_topics.json", "r") as file:
             trends = json.load(file)
-    except FileNotFoundError:
-        print("❌ Error: trending_topics.json not found.")
+    except (FileNotFoundError, json.JSONDecodeError):
+        print("❌ Error: trending_topics.json not found or contains invalid JSON.")
         return None
 
     if not trends:
         print("❌ No trending topics found.")
         return None
 
+    # فیلتر کردن داده‌های نامعتبر
+    valid_trends = [t for t in trends if isinstance(t, dict) and "topic" in t]
+
+    if not valid_trends:
+        print("❌ No valid trending topics found.")
+        return None
+
     # شمارش میزان تکرار موضوعات در منابع مختلف
-    topic_count = collections.Counter([t["title"] for t in trends])
+    topic_count = collections.Counter([t["topic"] for t in valid_trends])
 
     # مرتب‌سازی بر اساس بیشترین تکرار
     sorted_topics = sorted(topic_count.items(), key=lambda x: x[1], reverse=True)
 
-    # انتخاب اولین موضوع که مرتبط با Minecraft, AI, یا Gaming باشد
-    keywords = ["minecraft", "gaming", "ai", "technology", "computers"]
+    # انتخاب اولین موضوع مرتبط با Minecraft, AI, یا Gaming
+    keywords = ["minecraft", "knowledge", "gaming", "ai", "technology", "computers"]
     for topic, count in sorted_topics:
         if any(keyword in topic.lower() for keyword in keywords):
             print(f"✅ Best topic selected: {topic} (Found in {count} sources)")
             return topic
 
-    print("⚠ No suitable trending topic found.")
-    return None
+    # در صورت نبودن موضوع مرتبط، برترین موضوع را انتخاب کن
+    best_fallback_topic = sorted_topics[0][0] if sorted_topics else None
+    if best_fallback_topic:
+        print(f"⚠ No suitable trending topic found. Using top topic: {best_fallback_topic}")
+    
+    return best_fallback_topic
 
+# اجرای تابع
 topic = select_best_trending_topic()
-
 def generate_video_script(topic):
     """
     تولید یک متن ویدیوی جذاب با لحن عامیانه و پرانرژی.
