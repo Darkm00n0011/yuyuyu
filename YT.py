@@ -134,6 +134,25 @@ def fetch_all_trends():
 
     print(f"✅ {len(all_trends)} trending topics saved in trending_topics.json")
 
+def load_trending_topics():
+    file_path = "trending_topics.json"
+    if not os.path.exists(file_path) or os.stat(file_path).st_size == 0:
+        # اگر فایل وجود ندارد یا خالی است، مقدار پیش‌فرض ذخیره شود
+        default_data = [
+            {"topic": "Minecraft Secrets", "popularity": 95},
+            {"topic": "AI in 2025", "popularity": 90}
+        ]
+        with open(file_path, "w") as file:
+            json.dump(default_data, file, indent=4)
+        return default_data  # مقدار پیش‌فرض را برگردان
+
+    # اگر فایل خالی نبود، آن را بخوان
+    with open(file_path, "r") as file:
+        return json.load(file)
+
+trending_topics = load_trending_topics()
+print(trending_topics)  # برای تست
+
 def select_best_trending_topic():
     """
     تحلیل داده‌های ترند و انتخاب بهترین موضوع برای تولید ویدیو.
