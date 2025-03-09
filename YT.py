@@ -7,13 +7,13 @@ import openai
 import subprocess
 import cv2
 import numpy as np
-import moviepy.editor as mp  # فقط این یکی کافیه!
 from datetime import datetime
 from pytrends.request import TrendReq
 from pydub import AudioSegment
 from pydub.effects import normalize
+from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
+from moviepy.video.fx import fadein, fadeout
 from PIL import Image, ImageDraw, ImageFont
-
 # Load environment variables from Railway
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
@@ -299,18 +299,17 @@ def enhance_video(input_video, output_video="enhanced_video.mp4"):
     print("🎬 Enhancing video with effects...")
 
     # بارگذاری ویدیو
-    clip = mp.VideoFileClip(input_video)
+    clip = VideoFileClip(input_video)
 
     # **افزودن افکت فید-این و فید-اوت (ورود و خروج نرم)**
-    clip = mp.video.fx.fadein.fadein(clip, 1)
-    clip = mp.video.fx.fadeout.fadeout(clip, 1)
+    clip = fadein.fadein(clip, 1).fx(fadeout.fadeout, 1)
 
     # **ایجاد متن عنوان برای ویدیو**
-    title_text = mp.TextClip("🔥 CreeperClues - Minecraft Facts!", fontsize=70, color="white", font="Arial-Bold")
+    title_text = TextClip("🔥 CreeperClues - Minecraft Facts!", fontsize=70, color="white", font="Arial-Bold")
     title_text = title_text.set_position(("center", "top")).set_duration(3)
 
     # **ترکیب متن با ویدیو**
-    final_clip = mp.CompositeVideoClip([clip, title_text])
+    final_clip = CompositeVideoClip([clip, title_text])
 
     # ذخیره‌ی ویدیوی بهینه‌شده
     final_clip.write_videofile(output_video, codec="libx264", fps=30)
@@ -325,14 +324,14 @@ def add_video_effects(input_video, output_video="final_video_with_effects.mp4"):
     print("🎬 Adding effects to video...")
 
     # بارگذاری ویدیو اصلی
-    clip = mp.VideoFileClip(input_video)
+    clip = VideoFileClip(input_video)
 
     # ایجاد متن گرافیکی متحرک
-    txt_clip = mp.TextClip("🔥 Amazing Minecraft Fact!", fontsize=80, color='yellow', font="Impact-Bold")
+    txt_clip = TextClip("🔥 Amazing Minecraft Fact!", fontsize=80, color='yellow', font="Impact-Bold")
     txt_clip = txt_clip.set_position(("center", "top")).set_duration(3)  # نمایش برای ۳ ثانیه
 
     # ترکیب ویدیو و متن
-    final = mp.CompositeVideoClip([clip, txt_clip])
+    final = CompositeVideoClip([clip, txt_clip])
 
     # ذخیره ویدیو
     final.write_videofile(output_video, codec="libx264", fps=30)
