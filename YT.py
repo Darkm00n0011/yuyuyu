@@ -11,7 +11,6 @@ from datetime import datetime
 from pytrends.request import TrendReq
 from pydub import AudioSegment
 from pydub.effects import normalize
-import moviepy.editor
 from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
 from moviepy.video.fx import fadein, fadeout
 from PIL import Image, ImageDraw, ImageFont
