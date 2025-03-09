@@ -12,3 +12,4 @@ pillow
 flask
 gunicorn
 pytrends
+moviepy.editor
