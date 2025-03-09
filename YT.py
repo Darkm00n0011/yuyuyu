@@ -47,6 +47,26 @@ SHORT_VIDEO_FILE = "short_video.mp4"  # ویدیوی Shorts
 MAX_LONG_UPLOADS = 1  # فقط 1 ویدیوی بلند در روز
 MAX_SHORTS_UPLOADS = 1  # فقط 1 Shorts در روز
 
+def load_trending_topics():
+    file_path = "trending_topics.json"
+    if not os.path.exists(file_path) or os.stat(file_path).st_size == 0:
+        # مقدار پیش‌فرض اگر فایل وجود ندارد یا خالی است
+        default_data = [
+            {"title": "Minecraft Secrets", "popularity": 95},
+            {"title": "AI in 2025", "popularity": 90}
+        ]
+        with open(file_path, "w") as file:
+            json.dump(default_data, file, indent=4)
+        return default_data  # مقدار پیش‌فرض را برگردان
+
+    try:
+        with open(file_path, "r") as file:
+            return json.load(file)
+    except json.JSONDecodeError:
+        print("❌ Error: JSON file is corrupted. Resetting it.")
+        return load_trending_topics()  # فایل را ریست کن
+
+
 def fetch_youtube_trending(region_code="US", max_results=10):
     """
     دریافت لیست ویدیوهای پرطرفدار یوتیوب و ذخیره در trending_topics.json
@@ -133,25 +153,6 @@ def fetch_all_trends():
         json.dump(all_trends, file, indent=2)
 
     print(f"✅ {len(all_trends)} trending topics saved in trending_topics.json")
-
-def load_trending_topics():
-    file_path = "trending_topics.json"
-    if not os.path.exists(file_path) or os.stat(file_path).st_size == 0:
-        # اگر فایل وجود ندارد یا خالی است، مقدار پیش‌فرض ذخیره شود
-        default_data = [
-            {"topic": "Minecraft Secrets", "popularity": 95},
-            {"topic": "AI in 2025", "popularity": 90}
-        ]
-        with open(file_path, "w") as file:
-            json.dump(default_data, file, indent=4)
-        return default_data  # مقدار پیش‌فرض را برگردان
-
-    # اگر فایل خالی نبود، آن را بخوان
-    with open(file_path, "r") as file:
-        return json.load(file)
-
-trending_topics = load_trending_topics()
-print(trending_topics)  # برای تست
 
 def select_best_trending_topic():
     """
