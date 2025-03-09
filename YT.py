@@ -201,6 +201,8 @@ def generate_video_script(topic):
         print("❌ Error generating script:", str(e))
         return None
 
+script = generate_video_script(topic)  # خروجی تابع را به script اختصاص بده
+
 def generate_video(voiceover, background_video, output_video="final_video.mp4"):
     """
     ترکیب پس‌زمینه‌ی ماینکرفت، صداگذاری، و اضافه کردن زیرنویس
