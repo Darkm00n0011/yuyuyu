@@ -166,6 +166,8 @@ def select_best_trending_topic():
     print("⚠ No suitable trending topic found.")
     return None
 
+topic = select_best_trending_topic()
+
 def generate_video_script(topic):
     """
     تولید یک متن ویدیوی جذاب با لحن عامیانه و پرانرژی.
