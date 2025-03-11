@@ -123,9 +123,9 @@ def fetch_google_trends():
 
 
 def fetch_reddit_trends(subreddit="gaming", limit=10):
-    """
-    دریافت پست‌های ترند از Reddit
-    """
+    
+    #دریافت پست‌های ترند از Reddit
+    
     url = f"https://www.reddit.com/r/{subreddit}/top.json?t=day&limit={limit}"
     headers = {"User-Agent": "Mozilla/5.0"}
     
