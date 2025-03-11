@@ -199,10 +199,17 @@ def select_best_trending_topic():
 
 # اجرای تابع
 topic = select_best_trending_topic()
+
+import openai
+
 def generate_video_script(topic):
     """
     تولید یک متن ویدیوی جذاب با لحن عامیانه و پرانرژی.
     """
+    if not topic:
+        print("❌ Error: No topic provided!")
+        return None
+
     prompt = f"""
     Write a viral YouTube video script for the topic: {topic}. 
     The script should be informal, fun, and engaging like a famous YouTuber. 
@@ -222,19 +229,25 @@ def generate_video_script(topic):
     """
 
     try:
-        response = openai.ChatCompletion.create(
+        client = openai.OpenAI()  # کلاینت جدید OpenAI
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=500
         )
-        script = response["choices"][0]["message"]["content"]
+        script = response.choices[0].message.content
         print("✅ Video script generated successfully!")
         return script
     except Exception as e:
         print("❌ Error generating script:", str(e))
         return None
 
-script = generate_video_script(topic)  # خروجی تابع را به script اختصاص بده
+topic = select_best_trending_topic()
+if topic:
+    script = generate_video_script(topic)
+else:
+    print("❌ No topic selected. Cannot generate script.")
+
 
 def generate_video(voiceover, background_video, output_video="final_video.mp4"):
     """
@@ -427,6 +440,12 @@ def generate_thumbnail(topic, output_file="thumbnail.png"):
     return output_file
 
 
+import openai
+import json
+
+import openai
+import json
+
 def generate_video_metadata(topic):
     """
     تولید عنوان، توضیحات و هشتگ‌های بهینه‌شده برای یوتیوب.
@@ -434,26 +453,31 @@ def generate_video_metadata(topic):
     print("📝 Generating video metadata...")
 
     prompt = f"""
-    Generate an engaging YouTube video title, description, and relevant hashtags for a video about {topic}.
+    Generate an engaging YouTube video title, description, and relevant hashtags for a video about "{topic}".
     
     - The title should be eye-catching and optimized for high CTR.
     - The description should include a short summary of the video, a call to action, and links.
     - The hashtags should be relevant and increase discoverability.
     
-    Return the output in JSON format.
-    """
+    Return the output in **valid JSON format** with keys: "title", "description", and "hashtags".
+    ""
 
     try:
-        response = openai.ChatCompletion.create(
+        client = openai.Client()  # مقداردهی صحیح کلاینت OpenAI
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=250
         )
         
-        content = response["choices"][0]["message"]["content"]
+        content = response.choices[0].message.content.strip()
+
+        # تلاش برای تبدیل JSON
         try:
-            metadata = json.loads(content)  # تلاش برای تبدیل JSON
-        except json.JSONDecodeError:
+            metadata = json.loads(content)
+            if not all(key in metadata for key in ["title", "description", "hashtags"]):
+                raise ValueError("Missing expected keys in JSON")
+        except (json.JSONDecodeError, ValueError):
             print("⚠ Warning: Invalid JSON received from OpenAI. Using default metadata.")
             metadata = {
                 "title": f"Awesome Video About {topic}!",
@@ -466,6 +490,13 @@ def generate_video_metadata(topic):
     except Exception as e:
         print("❌ Error generating metadata:", str(e))
         return None
+
+# تست تابع
+topic = "Minecraft's Secret Glitch"
+metadata = generate_video_metadata(topic)
+print(metadata)
+
+
 
 def analyze_past_videos():
     """
