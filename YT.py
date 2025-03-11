@@ -230,10 +230,11 @@ def generate_video_script(topic):
     try:
         client = openai.OpenAI()  # کلاینت جدید OpenAI
         response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=500
-        )
+          model="gpt-3.5-turbo",  # یا "o3-mini"
+          messages=[{"role": "user", "content": prompt}],
+          max_tokens=250
+)
+
         script = response.choices[0].message.content
         print("✅ Video script generated successfully!")
         return script
