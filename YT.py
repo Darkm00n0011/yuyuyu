@@ -659,6 +659,11 @@ if check_audio_copyright("voiceover.mp3"):
 else:
     print("❌ Audio rejected due to potential copyright violation.")
 
+
+"""
+
+
+
 def check_video_content(video_file):
     
     #بررسی محتوای ویدیو برای محتوای حساس یا ممنوعه.
@@ -796,6 +801,8 @@ def upload_video(video_file, video_id):
             "Content-Type": "video/mp4"
         }, data=file)
     print("Upload response:", upload_response.json())
+
+upload_video = upload_video(video_file, video_id)
 
 # اجرای آپلود در زمان مناسب
 if __name__ == "__main__":
