@@ -267,10 +267,11 @@ def generate_video_metadata(topic):
     try:
         client = openai.Client()  # مقداردهی صحیح کلاینت OpenAI
         response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=250
-        )
+         model="gpt-3.5-turbo",  # یا "o3-mini"
+         messages=[{"role": "user", "content": prompt}],
+         max_tokens=250
+)
+
         
         content = response.choices[0].message.content.strip()
 
@@ -562,11 +563,12 @@ def check_copyright_violation(script):
     """
 
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=100
-        )
+        response = client.chat.completions.create(
+         model="gpt-3.5-turbo",  # یا "o3-mini"
+         messages=[{"role": "user", "content": prompt}],
+         max_tokens=250
+)
+   
         result = response["choices"][0]["message"]["content"]
 
         if "SAFE" in result:
@@ -601,11 +603,12 @@ def check_youtube_policy(title, description):
     """
 
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=100
-        )
+        response = client.chat.completions.create(
+          model="gpt-3.5-turbo",  # یا "o3-mini"
+          messages=[{"role": "user", "content": prompt}],
+          max_tokens=250
+)
+
         result = response["choices"][0]["message"]["content"]
 
         if "SAFE" in result:
@@ -638,7 +641,7 @@ def check_audio_copyright(audio_file):
 
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4",
+            model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=100
         )
@@ -679,7 +682,7 @@ def check_video_content(video_file):
 
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4",
+            model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=100
         )
