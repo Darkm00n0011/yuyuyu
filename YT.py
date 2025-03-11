@@ -68,9 +68,9 @@ def load_trending_topics():
 
 
 def fetch_youtube_trending(region_code="US", max_results=10):
-    """
-    دریافت لیست ویدیوهای پرطرفدار یوتیوب و ذخیره در trending_topics.json
-    """
+    
+    #دریافت لیست ویدیوهای پرطرفدار یوتیوب و ذخیره در trending_topics.json
+
     access_token = get_access_token()
     
     url = "https://www.googleapis.com/youtube/v3/videos"
@@ -106,9 +106,9 @@ def fetch_youtube_trending(region_code="US", max_results=10):
     print(f"✅ {len(trending_topics)} trending topics saved in trending_topics.json")
 
 def fetch_google_trends():
-    """
-    دریافت لیست ترندهای روز از Google Trends
-    """
+    
+    #دریافت لیست ترندهای روز از Google Trends
+    
     pytrends = TrendReq(hl='en-US', tz=360)  
     pytrends.build_payload(kw_list=["Minecraft", "AI", "Technology"], timeframe="now 1-d", geo="US")  
     
@@ -139,9 +139,9 @@ def fetch_reddit_trends(subreddit="gaming", limit=10):
     return reddit_trends
 
 def fetch_all_trends():
-    """
-    دریافت و ترکیب داده‌های ترند از یوتیوب، گوگل ترندز، و ردیت
-    """
+    
+    #دریافت و ترکیب داده‌های ترند از یوتیوب، گوگل ترندز، و ردیت
+    
     print("🔍 Fetching trending topics from multiple sources...")
     
     youtube_trends = fetch_youtube_trending()
@@ -155,9 +155,9 @@ def fetch_all_trends():
     print(f"✅ {len(all_trends)} trending topics saved in trending_topics.json")
 
 def select_best_trending_topic():
-    """
-    تحلیل داده‌های ترند و انتخاب بهترین موضوع برای تولید ویدیو.
-    """
+    
+    #تحلیل داده‌های ترند و انتخاب بهترین موضوع برای تولید ویدیو.
+    
     # بارگذاری داده‌ها از trending_topics.json
     try:
         with open("trending_topics.json", "r") as file:
@@ -203,9 +203,8 @@ topic = select_best_trending_topic()
 import openai
 
 def generate_video_script(topic):
-    """
-    تولید یک متن ویدیوی جذاب با لحن عامیانه و پرانرژی.
-    """
+    
+    #تولید یک متن ویدیوی جذاب با لحن عامیانه و پرانرژی.
     if not topic:
         print("❌ Error: No topic provided!")
         return None
@@ -250,9 +249,9 @@ else:
 
 
 def generate_video(voiceover, background_video, output_video="final_video.mp4"):
-    """
-    ترکیب پس‌زمینه‌ی ماینکرفت، صداگذاری، و اضافه کردن زیرنویس
-    """
+    
+    #ترکیب پس‌زمینه‌ی ماینکرفت، صداگذاری، و اضافه کردن زیرنویس
+    
     try:
         # ترکیب ویدیو و صدا
         command = f"ffmpeg -i {background_video} -i {voiceover} -c:v copy -c:a aac {output_video}"
@@ -264,9 +263,9 @@ def generate_video(voiceover, background_video, output_video="final_video.mp4"):
         return None
 
 def generate_subtitles(audio_file, output_srt="subtitles.srt"):
-    """
-    تولید زیرنویس هماهنگ با صدا با استفاده از Whisper AI
-    """
+    
+    #تولید زیرنویس هماهنگ با صدا با استفاده از Whisper AI
+    
     try:
         response = openai.Audio.transcribe("whisper-1", audio_file)
         subtitles = response["text"]
@@ -282,9 +281,9 @@ def generate_subtitles(audio_file, output_srt="subtitles.srt"):
 
 
 def generate_voiceover(script, output_audio="voiceover.mp3"):
-    """
-    تولید صداگذاری از متن با استفاده از ElevenLabs API
-    """
+    
+    #تولید صداگذاری از متن با استفاده از ElevenLabs API
+    
     if not ELEVENLABS_API_KEY:
         print("❌ ERROR: ElevenLabs API key is missing!")
         return None
@@ -314,9 +313,9 @@ def generate_voiceover(script, output_audio="voiceover.mp3"):
         return None
 
 def enhance_audio(input_audio, output_audio="enhanced_voiceover.mp3"):
-    """
-    پردازش و بهینه‌سازی صدای گوینده، حذف نویز و اضافه کردن افکت‌های صوتی
-    """
+    
+    #پردازش و بهینه‌سازی صدای گوینده، حذف نویز و اضافه کردن افکت‌های صوتی
+    
     print("🎧 Enhancing voiceover...")
 
     # بارگذاری فایل صوتی
@@ -347,9 +346,9 @@ def enhance_audio(input_audio, output_audio="enhanced_voiceover.mp3"):
 
 
 def enhance_video(input_video, output_video="enhanced_video.mp4"):
-    """
-    بهبود ویدیو با افزودن ترنزیشن‌ها، افکت‌های گرافیکی و متن
-    """
+    
+    #بهبود ویدیو با افزودن ترنزیشن‌ها، افکت‌های گرافیکی و متن
+    
     print("🎬 Enhancing video with effects...")
 
     # بارگذاری ویدیو
@@ -372,9 +371,9 @@ def enhance_video(input_video, output_video="enhanced_video.mp4"):
     return output_video
 
 def add_video_effects(input_video, output_video="final_video_with_effects.mp4"):
-    """
-    اضافه کردن افکت‌های تصویری، ترنزیشن‌ها و متن‌های گرافیکی به ویدیو
-    """
+    
+    #اضافه کردن افکت‌های تصویری، ترنزیشن‌ها و متن‌های گرافیکی به ویدیو
+    
     print("🎬 Adding effects to video...")
 
     # بارگذاری ویدیو اصلی
@@ -393,9 +392,9 @@ def add_video_effects(input_video, output_video="final_video_with_effects.mp4"):
     return output_video
 
 def generate_thumbnail(topic, output_file="thumbnail.png"):
-    """
-    تولید تامبنیل جذاب برای ویدیو، ابتدا با DALL·E، و در صورت خطا، با یک تصویر پیش‌فرض.
-    """
+    
+    #تولید تامبنیل جذاب برای ویدیو، ابتدا با DALL·E، و در صورت خطا، با یک تصویر پیش‌فرض.
+    
     print("🖼 Generating thumbnail...")
 
     # تلاش برای تولید تصویر با DALL·E
@@ -440,9 +439,9 @@ def generate_thumbnail(topic, output_file="thumbnail.png"):
     return output_file
 
 def generate_video_metadata(topic):
-    """
-    تولید عنوان، توضیحات و هشتگ‌های بهینه‌شده برای یوتیوب.
-    """
+    
+    #تولید عنوان، توضیحات و هشتگ‌های بهینه‌شده برای یوتیوب.
+    
     print("📝 Generating video metadata...")
 
     prompt = f"""
@@ -526,9 +525,9 @@ def analyze_past_videos():
     return best_videos
 
 def suggest_improvements():
-    """
-    پیشنهاد بهینه‌سازی استراتژی ویدیو بر اساس ویدیوهای موفق قبلی.
-    """
+    
+    #پیشنهاد بهینه‌سازی استراتژی ویدیو بر اساس ویدیوهای موفق قبلی.
+    
     best_videos = analyze_past_videos()
     
     if not best_videos:
@@ -550,9 +549,8 @@ def suggest_improvements():
         print("- Test different thumbnail styles (e.g., bold text, bright colors).")
 
 def check_copyright_violation(script):
-    """
-    بررسی متن تولید شده برای جلوگیری از کپی‌رایت.
-    """
+    
+    #بررسی متن تولید شده برای جلوگیری از کپی‌رایت.
     prompt = f"""
     Please analyze the following script for any copyright violations, plagiarism, or YouTube policy violations.
     If the script is safe, return "SAFE".
@@ -589,9 +587,9 @@ else:
     print("❌ Script rejected due to potential copyright or policy violations.")
 
 def check_youtube_policy(title, description):
-    """
-    بررسی عنوان و توضیحات برای اطمینان از عدم نقض قوانین یوتیوب.
-    """
+    
+    #بررسی عنوان و توضیحات برای اطمینان از عدم نقض قوانین یوتیوب.
+    
     prompt = f"""
     Please analyze the following YouTube video metadata to check if it violates YouTube's policies.
     If it's safe, return "SAFE".
@@ -626,9 +624,9 @@ else:
     print("❌ Video upload blocked due to policy violation.")
 
 def check_audio_copyright(audio_file):
-    """
-    بررسی اینکه آیا موسیقی یا صداگذاری استفاده شده کپی‌رایت دارد یا خیر.
-    """
+    
+    #بررسی اینکه آیا موسیقی یا صداگذاری استفاده شده کپی‌رایت دارد یا خیر.
+    
     prompt = f"""
     Please analyze the following audio file and determine if it contains copyrighted music or speech.
     If it's safe, return "SAFE".
@@ -662,9 +660,9 @@ else:
     print("❌ Audio rejected due to potential copyright violation.")
 
 def check_video_content(video_file):
-    """
-    بررسی محتوای ویدیو برای محتوای حساس یا ممنوعه.
-    """
+    
+    #بررسی محتوای ویدیو برای محتوای حساس یا ممنوعه.
+    
     prompt = f"""
     Please analyze the following video file and determine if it contains sensitive, inappropriate, or copyrighted content.
     If it's safe, return "SAFE".
