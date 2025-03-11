@@ -663,11 +663,6 @@ if check_audio_copyright("voiceover.mp3"):
 else:
     print("❌ Audio rejected due to potential copyright violation.")
 
-
-"""
-
-
-
 def check_video_content(video_file):
     
     #بررسی محتوای ویدیو برای محتوای حساس یا ممنوعه.
