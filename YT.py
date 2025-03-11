@@ -2,8 +2,6 @@ import sys
 import moviepy
 print("Python path:", sys.path)
 print("MoviePy version:", moviepy.__version__)
-
-
 import os
 import requests
 import json
