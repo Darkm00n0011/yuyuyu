@@ -616,7 +616,7 @@ def check_youtube_policy(title, description):
     except Exception as e:
         print("❌ Error checking YouTube policy:", str(e))
         return True
-
+video_metadata = generate_video_metadata(topic)
 # بررسی قبل از آپلود
 if video_metadata and check_youtube_policy(video_metadata["title"], video_metadata["description"]):
     upload_video(enhanced_video, video_id)
