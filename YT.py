@@ -452,7 +452,7 @@ def generate_video_metadata(topic):
     - The hashtags should be relevant and increase discoverability.
     
     Return the output in **valid JSON format** with keys: "title", "description", and "hashtags".
-    ""
+    """
 
     try:
         client = openai.Client()  # مقداردهی صحیح کلاینت OpenAI
