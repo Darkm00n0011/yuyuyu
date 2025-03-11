@@ -247,37 +247,53 @@ if topic:
 else:
     print("❌ No topic selected. Cannot generate script.")
 
+def generate_video_metadata(topic):
+    
+    #تولید عنوان، توضیحات و هشتگ‌های بهینه‌شده برای یوتیوب.
+    
+    print("📝 Generating video metadata...")
 
-def generate_video(voiceover, background_video, output_video="final_video.mp4"):
+    prompt = f"""
+    Generate an engaging YouTube video title, description, and relevant hashtags for a video about "{topic}".
     
-    #ترکیب پس‌زمینه‌ی ماینکرفت، صداگذاری، و اضافه کردن زیرنویس
+    - The title should be eye-catching and optimized for high CTR.
+    - The description should include a short summary of the video, a call to action, and links.
+    - The hashtags should be relevant and increase discoverability.
     
+    Return the output in **valid JSON format** with keys: "title", "description", and "hashtags".
+    """
+
     try:
-        # ترکیب ویدیو و صدا
-        command = f"ffmpeg -i {background_video} -i {voiceover} -c:v copy -c:a aac {output_video}"
-        subprocess.run(command, shell=True, check=True)
-        print("✅ Video generated successfully!")
-        return output_video
+        client = openai.Client()  # مقداردهی صحیح کلاینت OpenAI
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=250
+        )
+        
+        content = response.choices[0].message.content.strip()
+
+        # تلاش برای تبدیل JSON
+        try:
+            metadata = json.loads(content)
+            if not all(key in metadata for key in ["title", "description", "hashtags"]):
+                raise ValueError("Missing expected keys in JSON")
+        except (json.JSONDecodeError, ValueError):
+            print("⚠ Warning: Invalid JSON received from OpenAI. Using default metadata.")
+            metadata = {
+                "title": f"Awesome Video About {topic}!",
+                "description": f"This video is all about {topic}. Stay tuned for more!",
+                "hashtags": "#YouTube #Trending"
+            }
+
+        print("✅ Video metadata generated successfully!")
+        return metadata
     except Exception as e:
-        print("❌ Error generating video:", str(e))
+        print("❌ Error generating metadata:", str(e))
         return None
 
-def generate_subtitles(audio_file, output_srt="subtitles.srt"):
-    
-    #تولید زیرنویس هماهنگ با صدا با استفاده از Whisper AI
-    
-    try:
-        response = openai.Audio.transcribe("whisper-1", audio_file)
-        subtitles = response["text"]
-
-        with open(output_srt, "w") as srt_file:
-            srt_file.write(subtitles)
-
-        print("✅ Subtitles generated successfully!")
-        return output_srt
-    except Exception as e:
-        print("❌ Error generating subtitles:", str(e))
-        return None
+metadata = generate_video_metadata(topic)
+print(metadata)
 
 
 def generate_voiceover(script, output_audio="voiceover.mp3"):
@@ -311,6 +327,40 @@ def generate_voiceover(script, output_audio="voiceover.mp3"):
     else:
         print(f"❌ Error generating voiceover: {response.json()}")
         return None
+
+
+
+def generate_video(voiceover, background_video, output_video="final_video.mp4"):
+    
+    #ترکیب پس‌زمینه‌ی ماینکرفت، صداگذاری، و اضافه کردن زیرنویس
+    
+    try:
+        # ترکیب ویدیو و صدا
+        command = f"ffmpeg -i {background_video} -i {voiceover} -c:v copy -c:a aac {output_video}"
+        subprocess.run(command, shell=True, check=True)
+        print("✅ Video generated successfully!")
+        return output_video
+    except Exception as e:
+        print("❌ Error generating video:", str(e))
+        return None
+
+def generate_subtitles(audio_file, output_srt="subtitles.srt"):
+    
+    #تولید زیرنویس هماهنگ با صدا با استفاده از Whisper AI
+    
+    try:
+        response = openai.Audio.transcribe("whisper-1", audio_file)
+        subtitles = response["text"]
+
+        with open(output_srt, "w") as srt_file:
+            srt_file.write(subtitles)
+
+        print("✅ Subtitles generated successfully!")
+        return output_srt
+    except Exception as e:
+        print("❌ Error generating subtitles:", str(e))
+        return None
+
 
 def enhance_audio(input_audio, output_audio="enhanced_voiceover.mp3"):
     
@@ -437,56 +487,6 @@ def generate_thumbnail(topic, output_file="thumbnail.png"):
     img.save(output_file)
     print(f"✅ Thumbnail saved as {output_file}")
     return output_file
-
-def generate_video_metadata(topic):
-    
-    #تولید عنوان، توضیحات و هشتگ‌های بهینه‌شده برای یوتیوب.
-    
-    print("📝 Generating video metadata...")
-
-    prompt = f"""
-    Generate an engaging YouTube video title, description, and relevant hashtags for a video about "{topic}".
-    
-    - The title should be eye-catching and optimized for high CTR.
-    - The description should include a short summary of the video, a call to action, and links.
-    - The hashtags should be relevant and increase discoverability.
-    
-    Return the output in **valid JSON format** with keys: "title", "description", and "hashtags".
-    """
-
-    try:
-        client = openai.Client()  # مقداردهی صحیح کلاینت OpenAI
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=250
-        )
-        
-        content = response.choices[0].message.content.strip()
-
-        # تلاش برای تبدیل JSON
-        try:
-            metadata = json.loads(content)
-            if not all(key in metadata for key in ["title", "description", "hashtags"]):
-                raise ValueError("Missing expected keys in JSON")
-        except (json.JSONDecodeError, ValueError):
-            print("⚠ Warning: Invalid JSON received from OpenAI. Using default metadata.")
-            metadata = {
-                "title": f"Awesome Video About {topic}!",
-                "description": f"This video is all about {topic}. Stay tuned for more!",
-                "hashtags": "#YouTube #Trending"
-            }
-
-        print("✅ Video metadata generated successfully!")
-        return metadata
-    except Exception as e:
-        print("❌ Error generating metadata:", str(e))
-        return None
-
-metadata = generate_video_metadata(topic)
-print(metadata)
-
-
 
 def analyze_past_videos():
 
