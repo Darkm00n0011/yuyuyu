@@ -439,13 +439,6 @@ def generate_thumbnail(topic, output_file="thumbnail.png"):
     print(f"✅ Thumbnail saved as {output_file}")
     return output_file
 
-
-import openai
-import json
-
-import openai
-import json
-
 def generate_video_metadata(topic):
     """
     تولید عنوان، توضیحات و هشتگ‌های بهینه‌شده برای یوتیوب.
@@ -491,17 +484,15 @@ def generate_video_metadata(topic):
         print("❌ Error generating metadata:", str(e))
         return None
 
-# تست تابع
-topic = "Minecraft's Secret Glitch"
 metadata = generate_video_metadata(topic)
 print(metadata)
 
 
 
 def analyze_past_videos():
-    """
-    تحلیل داده‌های عملکرد ویدیوهای قبلی و بهینه‌سازی استراتژی محتوا.
-    """
+
+    #تحلیل داده‌های عملکرد ویدیوهای قبلی و بهینه‌سازی استراتژی محتوا
+
     analytics_file = "video_analytics.json"
 
     if not os.path.exists(analytics_file):
