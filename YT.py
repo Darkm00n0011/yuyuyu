@@ -1,3 +1,8 @@
+from scipy.io.wavfile import write
+from pydub import AudioSegment, effects
+from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
+import torch
+from bark import generate_audio
 import sys
 import moviepy
 print("Python path:", sys.path)
@@ -13,11 +18,18 @@ import cv2
 import numpy as np
 from datetime import datetime
 from pytrends.request import TrendReq
-from pydub import AudioSegment
 from pydub.effects import normalize
 from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
 from moviepy.video.fx import fadein, fadeout
 from PIL import Image, ImageDraw, ImageFont
+
+SHORTS_DURATION=59
+LONG_VIDEO_DURATION=600
+VIDEO_QUALITY=4K
+SHORTS_UPLOAD_TIME_UTC=15:00  # ساعت ۳ بعدازظهر UTC
+LONG_VIDEO_UPLOAD_TIME_UTC=12:00  # ساعت ۱۲ ظهر UTC
+
+
 # Load environment variables from Railway
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
@@ -64,26 +76,18 @@ def load_trending_topics():
         print("❌ Error: JSON file is corrupted. Resetting it.")
         return load_trending_topics()  # فایل را ریست کن
 
-
 def fetch_youtube_trending(region_code="US", max_results=10):
-    
-    #دریافت لیست ویدیوهای پرطرفدار یوتیوب و ذخیره در trending_topics.json
 
-    access_token = get_access_token()
-    
     url = "https://www.googleapis.com/youtube/v3/videos"
     params = {
-        "part": "snippet",
+        "part": "snippet,statistics",
         "chart": "mostPopular",
         "regionCode": region_code,
-        "maxResults": max_results
-    }
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Accept": "application/json"
+        "maxResults": max_results,
+        "key": YOUTUBE_API_KEY  # 🔹 استفاده از API Key
     }
 
-    response = requests.get(url, headers=headers, params=params)
+    response = requests.get(url, params=params)
     
     if response.status_code != 200:
         print("❌ Error fetching trending videos:", response.json())
@@ -92,103 +96,207 @@ def fetch_youtube_trending(region_code="US", max_results=10):
     trending_videos = response.json().get("items", [])
     trending_topics = []
 
-    for video in trending_videos:
-        title = video["snippet"]["title"]
-        description = video["snippet"]["description"]
-        trending_topics.append({"title": title, "description": description})
+    for rank, video in enumerate(trending_videos, start=1):
+        try:
+            title = video["snippet"]["title"]
+            description = video["snippet"]["description"]
+            channel = video["snippet"]["channelTitle"]
+            video_id = video["id"]
+            view_count = int(video["statistics"].get("viewCount", 0))
+            like_count = int(video["statistics"].get("likeCount", 0))
 
-    # ذخیره لیست در فایل JSON
-    with open("trending_topics.json", "w") as file:
-        json.dump(trending_topics, file, indent=2)
+            # 🔹 مقیاس محبوبیت بر اساس بازدید و لایک (بین ۰ تا ۱۰۰)
+            popularity = min(100, (view_count // 10000) + (like_count // 500))
 
-    print(f"✅ {len(trending_topics)} trending topics saved in trending_topics.json")
+            trending_topics.append({
+                "rank": rank,  # اضافه کردن رتبه ترند
+                "title": title,
+                "description": description,
+                "channel": channel,
+                "video_id": video_id,
+                "view_count": view_count,
+                "like_count": like_count,
+                "popularity": popularity
+            })
 
-def fetch_google_trends():
-    
-    #دریافت لیست ترندهای روز از Google Trends
-    
-    pytrends = TrendReq(hl='en-US', tz=360)  
-    pytrends.build_payload(kw_list=["Minecraft", "AI", "Technology"], timeframe="now 1-d", geo="US")  
-    
-    trending_searches = pytrends.trending_searches(pn="united_states")
-    
-    if trending_searches is not None and not trending_searches.empty:
-        trends = trending_searches[0].tolist()
-    else:
-        trends = []
+        except KeyError as e:
+            print(f"⚠️ Missing key {e} for video: {video.get('id', 'Unknown')}")
 
-    return [{"title": trend, "source": "Google Trends"} for trend in trends]
+    if trending_topics:  # ✅ فقط اگر داده‌ای وجود داشت، ذخیره کن
+        with open("trending_topics.json", "w") as file:
+            json.dump(trending_topics, file, indent=2)
 
+        print(f"✅ {len(trending_topics)} trending topics saved in trending_topics.json")
 
-def fetch_reddit_trends(subreddit="gaming", limit=10):
+    return trending_topics  # 🔹 بازگرداندن داده‌ها برای استفاده احتمالی
+
+def fetch_google_trends(region="united_states"):
+    """ دریافت لیست ترندهای روز از Google Trends و ذخیره در trending_topics.json """
+
+    pytrends = TrendReq(hl='en-US', tz=360)
     
-    #دریافت پست‌های ترند از Reddit
-    
-    url = f"https://www.reddit.com/r/{subreddit}/top.json?t=day&limit={limit}"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    
-    response = requests.get(url, headers=headers)
-    if response.status_code != 200:
-        print("❌ Error fetching Reddit trends:", response.json())
+    # 🔹 بررسی اینکه آیا کشور پشتیبانی می‌شود یا نه
+    try:
+        trending_searches = pytrends.trending_searches(pn=region)
+    except Exception as e:
+        print(f"❌ Error fetching Google Trends for {region}: {e}")
         return []
 
-    posts = response.json().get("data", {}).get("children", [])
-    reddit_trends = [{"title": post["data"]["title"], "source": "Reddit"} for post in posts]
-    return reddit_trends
+    if trending_searches is None or trending_searches.empty:
+        print("❌ No Google Trends data found!")
+        return []
 
-def fetch_all_trends():
+    trends = trending_searches[0].tolist()[:10]  # 🔹 فقط ۱۰ ترند برتر
     
-    #دریافت و ترکیب داده‌های ترند از یوتیوب، گوگل ترندز، و ردیت
-    
-    print("🔍 Fetching trending topics from multiple sources...")
-    
-    youtube_trends = fetch_youtube_trending()
+    google_trends = []
+    for i, trend in enumerate(trends):
+        search_volume = None  # 🔹 مقدار اولیه حجم جستجو
+        try:
+            pytrends.build_payload([trend], timeframe="now 1-d", geo=region.upper())
+            interest_over_time = pytrends.interest_over_time()
+            if not interest_over_time.empty:
+                search_volume = int(interest_over_time.iloc[-1, 0])  # 🔹 آخرین مقدار داده‌شده
+        except Exception as e:
+            print(f"⚠️ Could not fetch interest for {trend}: {e}")
+
+        popularity = search_volume if search_volume is not None else (100 - (i * 10))  # 🔹 مقدار تخمینی در صورت نبود داده
+
+        google_trends.append({
+            "title": trend,
+            "source": "Google Trends",
+            "search_volume": search_volume,
+            "popularity": popularity
+        })
+
+    if google_trends:  # ✅ ذخیره فقط در صورت داشتن داده
+        with open("trending_topics.json", "w") as file:
+            json.dump(google_trends, file, indent=2)
+
+        print(f"✅ {len(google_trends)} Google Trends saved in trending_topics.json")
+
+    return google_trends  # 🔹 بازگرداندن داده‌ها برای استفاده احتمالی
+
+def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
+    """ دریافت پست‌های پرطرفدار از چندین Reddit subreddit و ذخیره در trending_topics.json """
+
+    headers = {"User-Agent": "Mozilla/5.0"}
+    reddit_trends = []
+
+    for subreddit in subreddits:
+        url = f"https://www.reddit.com/r/{subreddit}/top.json?t={time_period}&limit={limit}"
+
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()  # بررسی وضعیت HTTP
+            data = response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Error fetching Reddit trends for {subreddit}: {e}")
+            continue
+        except json.JSONDecodeError:
+            print(f"❌ Error decoding JSON response from Reddit ({subreddit})!")
+            continue
+
+        posts = data.get("data", {}).get("children", [])
+        if not posts:
+            print(f"⚠ No trending posts found on r/{subreddit}!")
+            continue
+
+        for post in posts:
+            post_data = post["data"]
+            title = post_data.get("title", "Unknown Title")
+            post_id = post_data.get("id", "")
+            url = f"https://www.reddit.com{post_data.get('permalink', '')}"
+            ups = post_data.get("ups", 0)
+            score = post_data.get("score", 0)
+
+            # بهبود محاسبه محبوبیت (بر اساس بالاترین امتیاز در میان پست‌های دریافت شده)
+            popularity = min(100, (score / max(1, posts[0]["data"].get("score", 1))) * 100)
+
+            reddit_trends.append({
+                "title": title,
+                "post_id": post_id,
+                "url": url,
+                "subreddit": subreddit,
+                "source": "Reddit",
+                "popularity": round(popularity, 2)  # مقدار را تا دو رقم اعشار ذخیره می‌کنیم
+            })
+
+    if reddit_trends:  # ✅ ذخیره فقط در صورت داشتن داده
+        with open("trending_topics.json", "w") as file:
+            json.dump(reddit_trends, file, indent=2)
+
+        print(f"✅ {len(reddit_trends)} Reddit trends saved in trending_topics.json")
+
+    return reddit_trends  # 🔹 بازگرداندن داده‌ها برای استفاده در برنامه
+
+def fetch_all_trends(region_code="US", reddit_subreddits=["gaming"], reddit_limit=10, time_period="day"):
+    """ دریافت و ترکیب داده‌های ترند از یوتیوب، گوگل ترندز، و ردیت و ذخیره در trending_topics.json """
+
+    print("🔍 Fetching YouTube Trends...")
+    youtube_trends = fetch_youtube_trending(region_code)
+
+    print("🔍 Fetching Google Trends...")
     google_trends = fetch_google_trends()
-    reddit_trends = fetch_reddit_trends()
 
-    all_trends = youtube_trends + google_trends + reddit_trends  # ترکیب داده‌های ترند
+    print("🔍 Fetching Reddit Trends...")
+    reddit_trends = fetch_reddit_trends(reddit_subreddits, reddit_limit, time_period)
+
+    # ترکیب تمام ترندها در یک لیست واحد
+    all_trends = youtube_trends + google_trends + reddit_trends
+
+    # افزودن زمان آخرین به‌روزرسانی
+    all_trends_data = {
+        "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "trends": all_trends
+    }
+
+    # ذخیره در فایل
     with open("trending_topics.json", "w") as file:
-        json.dump(all_trends, file, indent=2)
+        json.dump(all_trends_data, file, indent=2)
 
-    print(f"✅ {len(all_trends)} trending topics saved in trending_topics.json")
+    print(f"✅ {len(all_trends)} trends saved in trending_topics.json")
 
-def select_best_trending_topic():
-    
-    #تحلیل داده‌های ترند و انتخاب بهترین موضوع برای تولید ویدیو.
-    
-    # بارگذاری داده‌ها از trending_topics.json
+    return all_trends
+
+
+def select_best_trending_topic(json_file="trending_topics.json"):
+
+    # تلاش برای بارگذاری داده‌های ترند
     try:
-        with open("trending_topics.json", "r") as file:
+        with open(json_file, "r", encoding="utf-8") as file:
             trends = json.load(file)
-    except (FileNotFoundError, json.JSONDecodeError):
-        print("❌ Error: trending_topics.json not found or contains invalid JSON.")
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"❌ Error: {json_file} not found or contains invalid JSON. ({e})")
         return None
 
+    # بررسی خالی بودن لیست ترندها
     if not trends:
         print("❌ No trending topics found.")
         return None
 
-    # فیلتر کردن داده‌های نامعتبر
+    # فیلتر کردن داده‌های نامعتبر (باید دیکشنری باشند و کلید 'topic' را داشته باشند)
     valid_trends = [t for t in trends if isinstance(t, dict) and "topic" in t]
 
     if not valid_trends:
         print("❌ No valid trending topics found.")
         return None
 
-    # شمارش میزان تکرار موضوعات در منابع مختلف
+    # شمارش تعداد تکرار هر موضوع
     topic_count = collections.Counter([t["topic"] for t in valid_trends])
 
     # مرتب‌سازی بر اساس بیشترین تکرار
     sorted_topics = sorted(topic_count.items(), key=lambda x: x[1], reverse=True)
 
-    # انتخاب اولین موضوع مرتبط با Minecraft, AI, یا Gaming
+    # تعریف کلمات کلیدی مرتبط
     keywords = ["minecraft", "knowledge", "gaming", "ai", "technology", "computers"]
+
+    # انتخاب اولین موضوع مرتبط با یکی از کلمات کلیدی
     for topic, count in sorted_topics:
         if any(keyword in topic.lower() for keyword in keywords):
             print(f"✅ Best topic selected: {topic} (Found in {count} sources)")
             return topic
 
-    # در صورت نبودن موضوع مرتبط، برترین موضوع را انتخاب کن
+    # در صورت نبودن موضوع مرتبط، انتخاب موضوع پرترندتر
     best_fallback_topic = sorted_topics[0][0] if sorted_topics else None
     if best_fallback_topic:
         print(f"⚠ No suitable trending topic found. Using top topic: {best_fallback_topic}")
@@ -197,12 +305,60 @@ def select_best_trending_topic():
 
 # اجرای تابع
 topic = select_best_trending_topic()
+import requests
 
-import openai
+import requests
+import os
+
+PIXABAY_API_KEY = "YOUR_PIXABAY_API_KEY"  # کلید API رو جایگزین کن
+PIXABAY_URL = "https://pixabay.com/api/videos/"
+
+def download_best_minecraft_background(output_video="background.mp4"):
+    params = {
+        "key": PIXABAY_API_KEY,
+        "q": "Minecraft gameplay",
+        "video_type": "film",
+        "per_page": 5  # دریافت 5 ویدیو برتر
+    }
+
+    response = requests.get(PIXABAY_URL, params=params)
+    if response.status_code == 200:
+        data = response.json()
+        if not data["hits"]:
+            print("❌ No Minecraft videos found on Pixabay.")
+            return None
+
+        # مرتب‌سازی ویدیوها بر اساس کیفیت (رزولوشن عرضی) و طول ویدیو
+        sorted_videos = sorted(
+            data["hits"], 
+            key=lambda vid: (vid["videos"]["medium"]["width"], vid["duration"]), 
+            reverse=True  # اولویت با کیفیت ویدیو
+        )
+
+        best_video = sorted_videos[0]["videos"]["medium"]["url"]  # بهترین ویدیو
+
+        print(f"✅ Selected best video: {best_video}")
+
+        # دانلود ویدیو
+        video_response = requests.get(best_video, stream=True)
+        if video_response.status_code == 200:
+            with open(output_video, "wb") as f:
+                for chunk in video_response.iter_content(chunk_size=1024):
+                    f.write(chunk)
+            print(f"✅ Downloaded best background video: {output_video}")
+            return output_video
+        else:
+            print("❌ Error downloading video.")
+    else:
+        print("❌ Error fetching videos from Pixabay.")
+    
+    return None
+
+# تست دانلود بهترین ویدیو
+download_best_minecraft_background()
+
 
 def generate_video_script(topic):
-    
-    #تولید یک متن ویدیوی جذاب با لحن عامیانه و پرانرژی.
     if not topic:
         print("❌ Error: No topic provided!")
         return None
@@ -225,26 +381,21 @@ def generate_video_script(topic):
     Now, generate a script with this same fun, engaging style for the topic: {topic}.
     """
 
+    
+    api_key = "YOUR_MISTRAL_API_KEY"
+    api_url = "https://api.mistral.ai/v1/completions"
+    
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    data = {"model": "mistral-7b", "prompt": prompt, "max_tokens": 250, "temperature": 0.8}
+    
     try:
-        client = openai.OpenAI()  # کلاینت جدید OpenAI
-        response = client.chat.completions.create(
-          model="gpt-3.5-turbo",  # یا "o3-mini"
-          messages=[{"role": "user", "content": prompt}],
-          max_tokens=250
-)
-
-        script = response.choices[0].message.content
-        print("✅ Video script generated successfully!")
-        return script
+        response = requests.post(api_url, headers=headers, json=data)
+        response_json = response.json()
+        script = response_json.get("choices", [{}])[0].get("text", "")
+        return script if script else None
     except Exception as e:
         print("❌ Error generating script:", str(e))
         return None
-
-topic = select_best_trending_topic()
-if topic:
-    script = generate_video_script(topic)
-else:
-    print("❌ No topic selected. Cannot generate script.")
 
 def generate_video_metadata(topic):
     
@@ -296,53 +447,25 @@ metadata = generate_video_metadata(topic)
 print(metadata)
 
 
-def generate_voiceover(script, output_audio="voiceover.mp3"):
-    
-    #تولید صداگذاری از متن با استفاده از ElevenLabs API
-    
-    if not ELEVENLABS_API_KEY:
-        print("❌ ERROR: ElevenLabs API key is missing!")
-        return None
-
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}"
-    headers = {
-        "Content-Type": "application/json",
-        "xi-api-key": ELEVENLABS_API_KEY
-    }
-    payload = {
-        "text": script,
-        "model_id": "eleven_monolingual_v1",
-        "voice_settings": {
-            "stability": 0.5,
-            "similarity_boost": 0.8
-        }
-    }
-
-    response = requests.post(url, headers=headers, json=payload)
-    if response.status_code == 200:
-        with open(output_audio, "wb") as f:
-            f.write(response.content)
-        print("✅ Voiceover generated successfully!")
+def generate_voiceover(script, output_audio="voiceover.wav"):
+    try:
+        audio_array = generate_audio(script)  # Bark-based voice generation
+        sample_rate = 24000
+        write(output_audio, sample_rate, np.array(audio_array * 32767, dtype=np.int16))
         return output_audio
-    else:
-        print(f"❌ Error generating voiceover: {response.json()}")
+    except Exception as e:
+        print(f"❌ Error generating voiceover: {str(e)}")
         return None
-
-
 
 def generate_video(voiceover, background_video, output_video="final_video.mp4"):
-    
-    #ترکیب پس‌زمینه‌ی ماینکرفت، صداگذاری، و اضافه کردن زیرنویس
-    
     try:
-        # ترکیب ویدیو و صدا
         command = f"ffmpeg -i {background_video} -i {voiceover} -c:v copy -c:a aac {output_video}"
         subprocess.run(command, shell=True, check=True)
-        print("✅ Video generated successfully!")
         return output_video
     except Exception as e:
         print("❌ Error generating video:", str(e))
         return None
+
 
 def generate_subtitles(audio_file, output_srt="subtitles.srt"):
     
@@ -363,62 +486,25 @@ def generate_subtitles(audio_file, output_srt="subtitles.srt"):
 
 
 def enhance_audio(input_audio, output_audio="enhanced_voiceover.mp3"):
-    
-    #پردازش و بهینه‌سازی صدای گوینده، حذف نویز و اضافه کردن افکت‌های صوتی
-    
-    print("🎧 Enhancing voiceover...")
-
-    # بارگذاری فایل صوتی
     try:
         audio = AudioSegment.from_file(input_audio)
-    except Exception as e:
-        print(f"❌ Error loading audio file: {e}")
-        return None
-
-    # **حذف نویز و نرمال‌سازی صدا**
-    enhanced_audio = normalize(audio)
-
-    # **افزودن افکت صوتی کلیک در ابتدای ویدیو**
-    try:
-        click_sound = AudioSegment.from_file("sounds/click.mp3")
-        enhanced_audio = click_sound + enhanced_audio
-    except FileNotFoundError:
-        print("⚠ Click sound file not found, continuing without it.")
-
-    # ذخیره‌ی نسخه‌ی بهینه‌شده
-    try:
+        enhanced_audio = effects.normalize(audio)
         enhanced_audio.export(output_audio, format="mp3")
-        print(f"✅ Voiceover enhanced and saved as {output_audio}")
         return output_audio
     except Exception as e:
-        print(f"❌ Error saving enhanced audio: {e}")
+        print(f"❌ Error enhancing audio: {e}")
         return None
 
-
 def enhance_video(input_video, output_video="enhanced_video.mp4"):
-    
-    #بهبود ویدیو با افزودن ترنزیشن‌ها، افکت‌های گرافیکی و متن
-    
-    print("🎬 Enhancing video with effects...")
-
-    # بارگذاری ویدیو
-    clip = VideoFileClip(input_video)
-
-    # **افزودن افکت فید-این و فید-اوت (ورود و خروج نرم)**
-    clip = fadein.fadein(clip, 1).fx(fadeout.fadeout, 1)
-
-    # **ایجاد متن عنوان برای ویدیو**
-    title_text = TextClip("🔥 CreeperClues - Minecraft Facts!", fontsize=70, color="white", font="Arial-Bold")
-    title_text = title_text.set_position(("center", "top")).set_duration(3)
-
-    # **ترکیب متن با ویدیو**
-    final_clip = CompositeVideoClip([clip, title_text])
-
-    # ذخیره‌ی ویدیوی بهینه‌شده
-    final_clip.write_videofile(output_video, codec="libx264", fps=30)
-
-    print(f"✅ Video enhanced and saved as {output_video}")
-    return output_video
+    try:
+        clip = VideoFileClip(input_video)
+        title_text = TextClip("🔥 Minecraft Fact!", fontsize=70, color="white").set_position("center").set_duration(3)
+        final_clip = CompositeVideoClip([clip, title_text])
+        final_clip.write_videofile(output_video, codec="libx264", fps=30)
+        return output_video
+    except Exception as e:
+        print(f"❌ Error enhancing video: {e}")
+        return None
 
 def add_video_effects(input_video, output_video="final_video_with_effects.mp4"):
     
