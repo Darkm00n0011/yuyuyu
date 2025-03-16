@@ -634,9 +634,9 @@ def suggest_improvements():
         print("- Focus on topics similar to high-performing videos.")
         print("- Encourage more comments by asking interactive questions.")
         print("- Test different thumbnail styles (e.g., bold text, bright colors).")
+        
+    script= generate_video_script(topic)
 
-
- script= generate_video_script(topic)
 def check_copyright_violation(script):
     
     #بررسی متن تولید شده برای جلوگیری از کپی‌رایت.
