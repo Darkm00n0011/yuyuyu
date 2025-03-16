@@ -364,6 +364,8 @@ def generate_video_script(topic):
         return None
 
     prompt = f"""
+
+
     Write a viral YouTube video script for the topic: {topic}. 
     The script should be informal, fun, and engaging like a famous YouTuber. 
     The tone should be energetic and natural, avoiding anything too formal or robotic.
@@ -421,7 +423,6 @@ def generate_video_metadata(topic):
          max_tokens=250
 )
 
-        
         content = response.choices[0].message.content.strip()
 
         # تلاش برای تبدیل JSON
@@ -634,6 +635,8 @@ def suggest_improvements():
         print("- Encourage more comments by asking interactive questions.")
         print("- Test different thumbnail styles (e.g., bold text, bright colors).")
 
+
+ script= generate_video_script(topic)
 def check_copyright_violation(script):
     
     #بررسی متن تولید شده برای جلوگیری از کپی‌رایت.
@@ -722,6 +725,10 @@ def check_audio_copyright(audio_file):
 
     Audio file: {audio_file}
     """
+
+
+
+
 
     try:
         response = openai.ChatCompletion.create(
