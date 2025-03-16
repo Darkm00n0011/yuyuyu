@@ -13,3 +13,4 @@ pillow
 flask
 gunicorn
 pytrends
+scipy
