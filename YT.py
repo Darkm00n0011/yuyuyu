@@ -16,7 +16,7 @@ import openai
 import subprocess
 import cv2
 import numpy as np
-from datetime import datetime
+from datetime import datetime, time
 from pytrends.request import TrendReq
 from pydub.effects import normalize
 from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
@@ -26,8 +26,8 @@ from PIL import Image, ImageDraw, ImageFont
 SHORTS_DURATION=59
 LONG_VIDEO_DURATION=600
 VIDEO_QUALITY="4K"
-SHORTS_UPLOAD_TIME_UTC=15:00  # ساعت ۳ بعدازظهر UTC
-LONG_VIDEO_UPLOAD_TIME_UTC=12:00  # ساعت ۱۲ ظهر UTC
+SHORTS_UPLOAD_TIME_UTC = time(15, 0)  # ساعت ۳ بعدازظهر UTC
+LONG_VIDEO_UPLOAD_TIME_UTC= time(12, 0)  # ساعت ۱۲ ظهر UTC
 
 
 # Load environment variables from Railway
