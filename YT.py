@@ -12,7 +12,7 @@ import requests
 import json
 import pytz
 from mistralai.client import MistralClient
-from mistralai.models import ChatMessage
+from mistralai.models.chat_completion import ChatMessage
 import collections
 import openai
 import subprocess
@@ -378,7 +378,7 @@ def generate_video_script(topic):
     Now, generate a script with this same fun, engaging style for the topic: {topic}.
     """
 
-    API_KEY = os.getenv("MISTRAL_API_KEY")  # Fetch API key from environment
+    API_KEY = os.getenv("MISTRAL_API_KEY")  # Fetch API key from Railway environment
     if not API_KEY:
         print("❌ Error: MISTRAL_API_KEY is missing!")
         return None
@@ -407,14 +407,15 @@ def generate_video_script(topic):
 
 
 # ✅ **Test the Function**
-topic = "Minecraft Tricks"  # Example topic
-script = generate_video_script(topic)
+if __name__ == "__main__":
+    topic = "Minecraft Tricks"  # Example topic
+    script = generate_video_script(topic)
 
-if script:
-    print("🎬 Generated Script:\n", script)
-else:
-    print("❌ Error: Script generation failed!")
-    sys.exit(1)  # Exit if script generation fails
+    if script:
+        print("🎬 Generated Script:\n", script)
+    else:
+        print("❌ Error: Script generation failed!")
+        sys.exit(1)  # Exit if script generation fails
 
 def generate_video_metadata(topic):
     
