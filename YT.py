@@ -12,7 +12,7 @@ import requests
 import json
 import pytz
 from mistralai.client import MistralClient
-from mistralai.models.chat_completion import ChatMessage
+from mistralai.models import ChatMessage
 import collections
 import openai
 import subprocess
