@@ -364,8 +364,6 @@ def generate_video_script(topic):
         return None
 
     prompt = f"""
-
-
     Write a viral YouTube video script for the topic: {topic}. 
     The script should be informal, fun, and engaging like a famous YouTuber. 
     The tone should be energetic and natural, avoiding anything too formal or robotic.
@@ -375,29 +373,51 @@ def generate_video_script(topic):
     2️⃣ Main Content (70% of the video) - Explain the topic in a super fun and easy way, like talking to a friend.
     3️⃣ Call to Action (Last 10 seconds) - Encourage viewers to like, comment, and subscribe in a way that feels natural.
 
-    Example:
-    - Hook: "Yo! Did you know there's a secret trick in Minecraft that lets you survive ANY fall?! Most players have NO idea about this!"
-    - Main Content: "So check this out... Normally, if you fall from a high place, you're DONE. But there's actually a trick where you can land on a ladder at the very last second and take ZERO damage! It's all about Minecraft physics, and it works EVERY time."
-    - Call to Action: "Try this in your next game and tell me in the comments if it worked! And hey, if you love Minecraft tricks like this, smash that like button so I know to drop more!"
-
     Now, generate a script with this same fun, engaging style for the topic: {topic}.
     """
 
-    
-    api_key = "YOUR_MISTRAL_API_KEY"
-    api_url = "https://api.mistral.ai/v1/completions"
-    
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    data = {"model": "mistral-7b", "prompt": prompt, "max_tokens": 250, "temperature": 0.8}
-    
+    API_KEY = "MISTRAL_API_KEY"  # Store in Railway secrets
+    API_URL = "https://api.mistral.ai/v1/chat/completions"
+
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    data = {
+        "model": "mistral-7b",
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 500,
+        "temperature": 0.8
+    }
+
     try:
-        response = requests.post(api_url, headers=headers, json=data)
+        response = requests.post(API_URL, headers=headers, json=data)
+        response.raise_for_status()  # Raise error if response code is not 200
+
         response_json = response.json()
-        script = response_json.get("choices", [{}])[0].get("text", "")
-        return script if script else None
-    except Exception as e:
-        print("❌ Error generating script:", str(e))
+        script = response_json.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+
+        if not script:
+            print("❌ Error: No script received from API")
+            return None
+
+        return script
+
+    except requests.exceptions.RequestException as e:
+        print("❌ API Request Error:", str(e))
         return None
+
+
+# Generate script and validate
+topic = "Minecraft Tricks"  # Example topic
+script = generate_video_script(topic)
+print("Generated Script:", script)  # Debugging output
+
+if not script:
+    print("❌ Error: Script generation failed!")
+    sys.exit(1)  # Stop execution if there's no script
+
 
 def generate_video_metadata(topic):
     
