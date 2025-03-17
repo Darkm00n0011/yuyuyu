@@ -11,6 +11,8 @@ import os
 import requests
 import json
 import pytz
+from mistralai.client import MistralClient
+from mistralai.models.chat_completion import ChatMessage
 import collections
 import openai
 import subprocess
@@ -376,27 +378,22 @@ def generate_video_script(topic):
     Now, generate a script with this same fun, engaging style for the topic: {topic}.
     """
 
-    API_KEY = "MISTRAL_API_KEY"  # Store in Railway secrets
-    API_URL = "https://api.mistral.ai/v1/chat/completions"
+    API_KEY = os.getenv("MISTRAL_API_KEY")  # Fetch API key from environment
+    if not API_KEY:
+        print("❌ Error: MISTRAL_API_KEY is missing!")
+        return None
 
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    data = {
-        "model": "mistral-7b",
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 500,
-        "temperature": 0.8
-    }
+    client = MistralClient(api_key=API_KEY)  # Initialize the Mistral API client
 
     try:
-        response = requests.post(API_URL, headers=headers, json=data)
-        response.raise_for_status()  # Raise error if response code is not 200
+        response = client.chat(
+            model="mistral-large-latest",
+            messages=[ChatMessage(role="user", content=prompt)],
+            max_tokens=500,
+            temperature=0.8
+        )
 
-        response_json = response.json()
-        script = response_json.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+        script = response.choices[0].message.content.strip()
 
         if not script:
             print("❌ Error: No script received from API")
@@ -404,20 +401,20 @@ def generate_video_script(topic):
 
         return script
 
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         print("❌ API Request Error:", str(e))
         return None
 
 
-# Generate script and validate
+# ✅ **Test the Function**
 topic = "Minecraft Tricks"  # Example topic
 script = generate_video_script(topic)
-print("Generated Script:", script)  # Debugging output
 
-if not script:
+if script:
+    print("🎬 Generated Script:\n", script)
+else:
     print("❌ Error: Script generation failed!")
-    sys.exit(1)  # Stop execution if there's no script
-
+    sys.exit(1)  # Exit if script generation fails
 
 def generate_video_metadata(topic):
     
