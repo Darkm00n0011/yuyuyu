@@ -16,4 +16,5 @@ pytrends
 scipy
 torch
 bark
-mistralai
+mistralai==0.4.2
+
