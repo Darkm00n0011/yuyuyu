@@ -11,9 +11,12 @@ import os
 import requests
 import json
 import pytz
-from mistralai.client import MistralClient
-from mistralai.models.chat_completion import ChatMessage
 
+import mistralai
+print(mistralai.__version__)
+
+from mistralai.client import MistralClient
+from mistralai.models import ChatMessage
 import collections
 import openai
 import subprocess
