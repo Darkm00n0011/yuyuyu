@@ -10,7 +10,7 @@ COPY . /app
 
 RUN pip install --no-cache-dir "moviepy==1.0.3"
 
-RUN pip install mistralai
+RUN pip install mistralai==0.1.4
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y ffmpeg
