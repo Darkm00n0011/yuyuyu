@@ -13,7 +13,6 @@ import json
 import pytz
 
 import mistralai
-print(mistralai.__version__)
 from mistralai.client import MistralClient
 print("MistralClient imported successfully!")
 
