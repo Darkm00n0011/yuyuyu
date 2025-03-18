@@ -16,7 +16,15 @@ import mistralai
 print(mistralai.__version__)
 from mistralai.client import MistralClient
 print("MistralClient imported successfully!")
-from mistralai.models import ChatMessage
+
+client = MistralClient(api_key="MISTRAL_API_KEY")
+
+response = client.chat(
+    messages=[{"role": "user", "content": "Hello, Mistral!"}],
+    model="mistral-tiny"
+)
+print(response)
+
 
 import collections
 import openai
