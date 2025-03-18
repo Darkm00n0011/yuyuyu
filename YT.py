@@ -14,16 +14,26 @@ import pytz
 
 import mistralai
 from mistralai.client import MistralClient
+
 print("MistralClient imported successfully!")
 
-client = MistralClient(api_key="MISTRAL_API_KEY")
+# دریافت API Key از متغیر محیطی
+api_key = os.getenv("MISTRAL_API_KEY")
+if not api_key:
+    raise ValueError("API Key not found! Make sure MISTRAL_API_KEY is set in Railway variables.")
 
+print(f"API Key Loaded: {api_key[:5]}********")  # فقط ۵ کاراکتر اول نمایش داده می‌شود
+
+# مقدار صحیح API Key را به MistralClient بده
+client = MistralClient(api_key=api_key)
+
+# تست ارسال پیام
 response = client.chat(
     messages=[{"role": "user", "content": "Hello, Mistral!"}],
     model="mistral-tiny"
 )
-print(response)
 
+print(response)
 
 import collections
 import openai
