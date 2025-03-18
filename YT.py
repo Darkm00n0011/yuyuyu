@@ -14,9 +14,10 @@ import pytz
 
 import mistralai
 print(mistralai.__version__)
-
 from mistralai.client import MistralClient
+print("MistralClient imported successfully!")
 from mistralai.models import ChatMessage
+
 import collections
 import openai
 import subprocess
