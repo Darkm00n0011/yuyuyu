@@ -12,7 +12,6 @@ import requests
 import json
 import pytz
 import collections
-import whisper
 import openai
 import subprocess
 import cv2
@@ -527,25 +526,6 @@ def generate_video(voiceover, background_video, output_video="final_video.mp4"):
     except Exception as e:
         print("❌ Error generating video:", str(e))
         return None
-
-
-def generate_subtitles(audio_file, output_srt="subtitles.srt"):
-    
-    #تولید زیرنویس هماهنگ با صدا با استفاده از Whisper AI
-    
-    try:
-        response = openai.Audio.transcribe("whisper-1", audio_file)
-        subtitles = response["text"]
-
-        with open(output_srt, "w") as srt_file:
-            srt_file.write(subtitles)
-
-        print("✅ Subtitles generated successfully!")
-        return output_srt
-    except Exception as e:
-        print("❌ Error generating subtitles:", str(e))
-        return None
-
 
 def enhance_audio(input_audio, output_audio="enhanced_voiceover.mp3"):
     try:
