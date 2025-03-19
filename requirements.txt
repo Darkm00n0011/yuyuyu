@@ -16,5 +16,4 @@ pytrends
 scipy
 torch
 bark
-mistralai==0.4.2
-
+whisper
