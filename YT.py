@@ -78,8 +78,6 @@ def load_trending_topics():
         print("❌ Error: JSON file is corrupted. Resetting it.")
         return load_trending_topics()  # فایل را ریست کن
 
-print(response.json())
-
 def fetch_youtube_trending(region_code="US", max_results=10):
 
     url = "https://www.googleapis.com/youtube/v3/videos"
