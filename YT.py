@@ -12,6 +12,7 @@ import requests
 import json
 import pytz
 import collections
+import whisper
 import openai
 import subprocess
 import cv2
@@ -366,11 +367,6 @@ def download_best_minecraft_background(output_video="background.mp4"):
 # تست دانلود بهترین ویدیو
 download_best_minecraft_background()
 
-
-import os
-import requests
-import time
-
 def generate_video_script(topic):
     if not topic:
         print("❌ Error: No topic provided!")
@@ -456,9 +452,7 @@ import requests
 import json
 
 def generate_video_metadata(topic):
-    """
-    تولید عنوان، توضیحات و هشتگ‌های بهینه‌شده برای یوتیوب با استفاده از DeepSeek.
-    """
+
     print("📝 Generating video metadata...")
 
     prompt = f"""
