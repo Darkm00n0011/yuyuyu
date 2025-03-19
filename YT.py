@@ -706,6 +706,12 @@ def check_copyright_violation(script):
         print("❌ Error checking copyright:", str(e))
         return True  # اگر چکینگ انجام نشد، اجازه ادامه بده
 
+script = generate_video_script(topic)
+if not script:
+    print("❌ Script generation failed. Skipping video creation.")
+    exit()  # Stop execution
+
+
 # استفاده از این بررسی در روند تولید متن
 if script and check_copyright_violation(script):
     with open("video_script.txt", "w") as file:
