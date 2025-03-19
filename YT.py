@@ -34,7 +34,6 @@ LONG_VIDEO_UPLOAD_TIME_UTC= time(12, 0)  # ساعت ۱۲ ظهر UTC
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 REFRESH_TOKEN = os.getenv("REFRESH_TOKEN")
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 API_KEY = os.getenv("DEEPSEEK_API_KEY")
 if not API_KEY:
     print("❌ Error: DEEPSEEK_API_KEY is missing! Check your environment variables.")
