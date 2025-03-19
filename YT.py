@@ -11,30 +11,6 @@ import os
 import requests
 import json
 import pytz
-
-import mistralai
-from mistralai.client import MistralClient
-
-print("MistralClient imported successfully!")
-
-# دریافت API Key از متغیر محیطی
-api_key = os.getenv("MISTRAL_API_KEY")
-if not api_key:
-    raise ValueError("API Key not found! Make sure MISTRAL_API_KEY is set in Railway variables.")
-
-print(f"API Key Loaded: {api_key[:5]}********")  # فقط ۵ کاراکتر اول نمایش داده می‌شود
-
-# مقدار صحیح API Key را به MistralClient بده
-client = MistralClient(api_key=api_key)
-
-# تست ارسال پیام
-response = client.chat(
-    messages=[{"role": "user", "content": "Hello, Mistral!"}],
-    model="mistral-tiny"
-)
-
-print(response)
-
 import collections
 import openai
 import subprocess
@@ -58,13 +34,14 @@ LONG_VIDEO_UPLOAD_TIME_UTC= time(12, 0)  # ساعت ۱۲ ظهر UTC
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 REFRESH_TOKEN = os.getenv("REFRESH_TOKEN")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 API_KEY = os.getenv("DEEPSEEK_API_KEY")
 if not API_KEY:
     print("❌ Error: DEEPSEEK_API_KEY is missing! Check your environment variables.")
 VOICE_ID = "EXAVITQu4vr4xnSDxMaL"  # می‌تونی آی‌دی صدای مورد علاقه‌ات رو جایگزین کنی
-
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
+if not YOUTUBE_API_KEY:
+    print("❌ Error: YOUTUBE_API_KEY is missing! Check your environment variables.")
 # YouTube API URLs
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 METADATA_URL = "https://www.googleapis.com/youtube/v3/videos"
@@ -102,6 +79,8 @@ def load_trending_topics():
     except json.JSONDecodeError:
         print("❌ Error: JSON file is corrupted. Resetting it.")
         return load_trending_topics()  # فایل را ریست کن
+
+print(response.json())
 
 def fetch_youtube_trending(region_code="US", max_results=10):
 
@@ -284,6 +263,10 @@ def fetch_all_trends(region_code="US", reddit_subreddits=["gaming"], reddit_limi
     print(f"✅ {len(all_trends)} trends saved in trending_topics.json")
 
     return all_trends
+
+print(fetch_youtube_trending())  # بررسی دریافت ترندهای یوتیوب
+print(fetch_google_trends())  # بررسی دریافت ترندهای گوگل
+print(fetch_reddit_trends())  # بررسی دریافت ترندهای ردیت
 
 
 def select_best_trending_topic(json_file="trending_topics.json"):
@@ -470,10 +453,13 @@ def generate_video_script(topic):
         return None
 
 
+import requests
+import json
+
 def generate_video_metadata(topic):
-    
-    #تولید عنوان، توضیحات و هشتگ‌های بهینه‌شده برای یوتیوب.
-    
+    """
+    تولید عنوان، توضیحات و هشتگ‌های بهینه‌شده برای یوتیوب با استفاده از DeepSeek.
+    """
     print("📝 Generating video metadata...")
 
     prompt = f"""
@@ -487,36 +473,47 @@ def generate_video_metadata(topic):
     """
 
     try:
-        client = openai.Client()  # مقداردهی صحیح کلاینت OpenAI
-        response = client.chat.completions.create(
-         model="gpt-3.5-turbo",  # یا "o3-mini"
-         messages=[{"role": "user", "content": prompt}],
-         max_tokens=250
-)
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {"Authorization": "Bearer DEEPSEEK_API_KEY"}  # جایگزین کردن با کلید DeepSeek
+        data = {
+            "model": "deepseek-chat",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 250
+        }
 
-        content = response.choices[0].message.content.strip()
+        response = requests.post(url, json=data, headers=headers)
 
-        # تلاش برای تبدیل JSON
-        try:
-            metadata = json.loads(content)
-            if not all(key in metadata for key in ["title", "description", "hashtags"]):
-                raise ValueError("Missing expected keys in JSON")
-        except (json.JSONDecodeError, ValueError):
-            print("⚠ Warning: Invalid JSON received from OpenAI. Using default metadata.")
-            metadata = {
-                "title": f"Awesome Video About {topic}!",
-                "description": f"This video is all about {topic}. Stay tuned for more!",
-                "hashtags": "#YouTube #Trending"
-            }
+        if response.status_code == 200:
+            content = response.json()["choices"][0]["message"]["content"].strip()
 
-        print("✅ Video metadata generated successfully!")
-        return metadata
+            # تلاش برای تبدیل به JSON
+            try:
+                metadata = json.loads(content)
+                if not all(key in metadata for key in ["title", "description", "hashtags"]):
+                    raise ValueError("Missing expected keys in JSON")
+            except (json.JSONDecodeError, ValueError):
+                print("⚠ Warning: Invalid JSON received from DeepSeek. Using default metadata.")
+                metadata = {
+                    "title": f"Awesome Video About {topic}!",
+                    "description": f"This video is all about {topic}. Stay tuned for more!",
+                    "hashtags": "#YouTube #Trending"
+                }
+
+            print("✅ Video metadata generated successfully!")
+            return metadata
+        else:
+            print(f"❌ DeepSeek API Error: {response.text}")
+            return None
+
     except Exception as e:
         print("❌ Error generating metadata:", str(e))
         return None
 
+# **📌 تست اجرا**
+topic = "Minecraft Secrets"
 metadata = generate_video_metadata(topic)
 print(metadata)
+
 
 
 def generate_voiceover(script, output_audio="voiceover.wav"):
