@@ -12,7 +12,6 @@ import requests
 import json
 import pytz
 import collections
-import openai
 import subprocess
 import cv2
 import numpy as np
