@@ -60,6 +60,9 @@ CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 REFRESH_TOKEN = os.getenv("REFRESH_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+API_KEY = os.getenv("DEEPSEEK_API_KEY")
+if not API_KEY:
+    print("❌ Error: DEEPSEEK_API_KEY is missing! Check your environment variables.")
 VOICE_ID = "EXAVITQu4vr4xnSDxMaL"  # می‌تونی آی‌دی صدای مورد علاقه‌ات رو جایگزین کنی
 
 # YouTube API URLs
@@ -382,12 +385,20 @@ def download_best_minecraft_background(output_video="background.mp4"):
 download_best_minecraft_background()
 
 
+import os
+import requests
+import time
+
 def generate_video_script(topic):
     if not topic:
         print("❌ Error: No topic provided!")
         return None
 
-    # ✅ **پرامپت بهینه‌شده برای DeepSeek**
+    API_KEY = os.getenv("DEEPSEEK_API_KEY")
+    if not API_KEY:
+        print("❌ Error: Missing DEEPSEEK_API_KEY!")
+        return None
+
     prompt = f"""
     Generate a high-engagement YouTube video script about "{topic}" in an engaging, viral style.
     The script should follow this structure:
@@ -404,13 +415,6 @@ def generate_video_script(topic):
     Now, generate a **high-quality, viral** YouTube script for: "{topic}".
     """
 
-    # ✅ **API Key برای DeepSeek**
-    API_KEY = os.getenv("DEEPSEEK_API_KEY")
-    if not API_KEY:
-        print("❌ Error: DEEPSEEK_API_KEY is missing!")
-        return None
-
-    # ✅ **ارسال درخواست به DeepSeek API**
     url = "https://api.deepseek.com/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {API_KEY}",
@@ -425,10 +429,10 @@ def generate_video_script(topic):
 
     try:
         response = requests.post(url, headers=headers, json=data)
-        response.raise_for_status()  # اگر خطایی از سمت API بیاد، این دستور کرش می‌کنه
+        response.raise_for_status()  # Trigger an error for bad responses (4xx, 5xx)
 
         response_json = response.json()
-        script = response_json["choices"][0]["message"]["content"].strip()
+        script = response_json.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
 
         if not script:
             print("❌ Error: No script received from API")
@@ -436,21 +440,35 @@ def generate_video_script(topic):
 
         return script
 
-    except requests.exceptions.RequestException as e:
-        print("❌ API Request Error:", str(e))
+    except requests.exceptions.HTTPError as http_err:
+        if response.status_code == 400:
+            print("❌ Error 400: Invalid request format. Check API documentation.")
+        elif response.status_code == 401:
+            print("❌ Error 401: Authentication failed. Check your API key.")
+        elif response.status_code == 402:
+            print("❌ Error 402: Insufficient balance. Top up your account.")
+        elif response.status_code == 422:
+            print("❌ Error 422: Invalid parameters. Double-check your request body.")
+        elif response.status_code == 429:
+            print("❌ Error 429: Too many requests. Retrying in 10 seconds...")
+            time.sleep(10)  # Wait and retry
+            return generate_video_script(topic)
+        elif response.status_code == 500:
+            print("❌ Error 500: Server error. Retrying in 5 seconds...")
+            time.sleep(5)  # Wait and retry
+            return generate_video_script(topic)
+        elif response.status_code == 503:
+            print("❌ Error 503: Server overloaded. Retrying in 10 seconds...")
+            time.sleep(10)  # Wait and retry
+            return generate_video_script(topic)
+        else:
+            print(f"❌ HTTP Error: {http_err}")
         return None
 
+    except requests.exceptions.RequestException as req_err:
+        print(f"❌ API Request Error: {req_err}")
+        return None
 
-# ✅ **تست فانکشن**
-if __name__ == "__main__":
-    topic = "Minecraft Tricks"  # مثال: تولید اسکریپت درباره‌ی ماینکرفت
-    script = generate_video_script(topic)
-
-    if script:
-        print("🎬 Generated Script:\n", script)
-    else:
-        print("❌ Error: Script generation failed!")
-        sys.exit(1)  # اگر تولید اسکریپت ناموفق بود، برنامه کرش کند
 
 def generate_video_metadata(topic):
     
