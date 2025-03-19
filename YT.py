@@ -387,35 +387,48 @@ def generate_video_script(topic):
         print("❌ Error: No topic provided!")
         return None
 
+    # ✅ **پرامپت بهینه‌شده برای DeepSeek**
     prompt = f"""
-    Write a viral YouTube video script for the topic: {topic}. 
-    The script should be informal, fun, and engaging like a famous YouTuber. 
-    The tone should be energetic and natural, avoiding anything too formal or robotic.
+    Generate a high-engagement YouTube video script about "{topic}" in an engaging, viral style.
+    The script should follow this structure:
 
-    Structure:
-    1️⃣ Hook (First 5-10 seconds) - Start with a shocking fact, an exciting question, or a crazy statement.
-    2️⃣ Main Content (70% of the video) - Explain the topic in a super fun and easy way, like talking to a friend.
-    3️⃣ Call to Action (Last 10 seconds) - Encourage viewers to like, comment, and subscribe in a way that feels natural.
+    1️⃣ **Hook (First 5-10 sec)**: Start with a shocking fact, bold statement, or an intriguing question.
+    2️⃣ **Main Content (70%)**: Explain the topic in an exciting and easy-to-understand way, just like a famous YouTuber.
+    3️⃣ **Call to Action (Last 10 sec)**: Encourage viewers to like, comment, and subscribe, but make it feel natural.
 
-    Now, generate a script with this same fun, engaging style for the topic: {topic}.
+    - The language should be **fun, casual, and highly engaging**.
+    - Keep sentences short and dynamic.
+    - Avoid robotic or overly formal tones.
+    - Use rhetorical questions and direct audience engagement.
+
+    Now, generate a **high-quality, viral** YouTube script for: "{topic}".
     """
 
-    API_KEY = os.getenv("MISTRAL_API_KEY")  # Fetch API key from Railway environment
+    # ✅ **API Key برای DeepSeek**
+    API_KEY = os.getenv("DEEPSEEK_API_KEY")
     if not API_KEY:
-        print("❌ Error: MISTRAL_API_KEY is missing!")
+        print("❌ Error: DEEPSEEK_API_KEY is missing!")
         return None
 
-    client = MistralClient(api_key=API_KEY)  # Initialize the Mistral API client
+    # ✅ **ارسال درخواست به DeepSeek API**
+    url = "https://api.deepseek.com/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "model": "deepseek-chat",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.8,
+        "max_tokens": 700
+    }
 
     try:
-        response = client.chat(
-            model="mistral-large-latest",
-            messages=[ChatMessage(role="user", content=prompt)],
-            max_tokens=500,
-            temperature=0.8
-        )
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()  # اگر خطایی از سمت API بیاد، این دستور کرش می‌کنه
 
-        script = response.choices[0].message.content.strip()
+        response_json = response.json()
+        script = response_json["choices"][0]["message"]["content"].strip()
 
         if not script:
             print("❌ Error: No script received from API")
@@ -423,21 +436,21 @@ def generate_video_script(topic):
 
         return script
 
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         print("❌ API Request Error:", str(e))
         return None
 
 
-# ✅ **Test the Function**
+# ✅ **تست فانکشن**
 if __name__ == "__main__":
-    topic = "Minecraft Tricks"  # Example topic
+    topic = "Minecraft Tricks"  # مثال: تولید اسکریپت درباره‌ی ماینکرفت
     script = generate_video_script(topic)
 
     if script:
         print("🎬 Generated Script:\n", script)
     else:
         print("❌ Error: Script generation failed!")
-        sys.exit(1)  # Exit if script generation fails
+        sys.exit(1)  # اگر تولید اسکریپت ناموفق بود، برنامه کرش کند
 
 def generate_video_metadata(topic):
     
