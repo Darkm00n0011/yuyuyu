@@ -357,9 +357,9 @@ def generate_video_script(topic):
         print("❌ Error: No topic provided!")
         return None
 
-    API_KEY = os.getenv("DEEPSEEK_API_KEY")
+    API_KEY = os.getenv("TOGETHER_AI_API")  # Use Together AI key
     if not API_KEY:
-        print("❌ Error: Missing DEEPSEEK_API_KEY!")
+        print("❌ Error: Missing TOGETHER_AI_API key!")
         return None
 
     prompt = f"""
@@ -378,13 +378,13 @@ def generate_video_script(topic):
     Now, generate a **high-quality, viral** YouTube script for: "{topic}".
     """
 
-    url = "https://api.deepseek.com/v1/chat/completions"
+    url = "https://api.together.xyz/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json"
     }
     data = {
-        "model": "deepseek-chat",
+        "model": "mistralai/Mixtral-8x7B-Instruct",  # Best free model
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.8,
         "max_tokens": 700
@@ -392,7 +392,7 @@ def generate_video_script(topic):
 
     try:
         response = requests.post(url, headers=headers, json=data)
-        response.raise_for_status()  # Trigger an error for bad responses (4xx, 5xx)
+        response.raise_for_status()  # Handle bad responses
 
         response_json = response.json()
         script = response_json.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
@@ -414,15 +414,15 @@ def generate_video_script(topic):
             print("❌ Error 422: Invalid parameters. Double-check your request body.")
         elif response.status_code == 429:
             print("❌ Error 429: Too many requests. Retrying in 10 seconds...")
-            time.sleep(10)  # Wait and retry
+            time.sleep(10)  # Retry
             return generate_video_script(topic)
         elif response.status_code == 500:
             print("❌ Error 500: Server error. Retrying in 5 seconds...")
-            time.sleep(5)  # Wait and retry
+            time.sleep(5)  # Retry
             return generate_video_script(topic)
         elif response.status_code == 503:
             print("❌ Error 503: Server overloaded. Retrying in 10 seconds...")
-            time.sleep(10)  # Wait and retry
+            time.sleep(10)  # Retry
             return generate_video_script(topic)
         else:
             print(f"❌ HTTP Error: {http_err}")
@@ -431,7 +431,6 @@ def generate_video_script(topic):
     except requests.exceptions.RequestException as req_err:
         print(f"❌ API Request Error: {req_err}")
         return None
-
 
 import requests
 import json
