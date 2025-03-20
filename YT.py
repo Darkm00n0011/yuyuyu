@@ -132,17 +132,21 @@ def fetch_youtube_trending(region_code="US", max_results=10):
 
     return trending_topics  # 🔹 بازگرداندن داده‌ها برای استفاده احتمالی
 
+import json
+from pytrends.request import TrendReq
+
 def fetch_google_trends():
     """ دریافت لیست ترندهای روز از Google Trends و ذخیره در trending_topics.json """
 
     pytrends = TrendReq(hl='en-US', tz=300)
-    
+
     try:
-        trending_searches = pytrends.trending_searches(pn="united_states")
+        # دریافت پیشنهادهای ترند بر اساس یک کلمه‌ی عمومی
+        suggestions = pytrends.suggestions(keyword="trending")
 
         google_trends = []
-        for i in range(min(10, len(trending_searches))):
-            title = trending_searches.iloc[i, 0]  # دریافت عنوان ترند
+        for item in suggestions[:10]:  # فقط 10 مورد اول
+            title = item["title"]
             google_trends.append({
                 "title": title,
                 "source": "Google Trends",
