@@ -136,8 +136,14 @@ def fetch_google_trends(region="united_states"):
     """ دریافت لیست ترندهای روز از Google Trends و ذخیره در trending_topics.json """
 
     pytrends = TrendReq(hl='en-US', tz=360)
-    
-    # 🔹 بررسی اینکه آیا کشور پشتیبانی می‌شود یا نه
+
+    # 🔹 بررسی مقدار معتبر برای region
+    valid_regions = ["united_states", "united_kingdom", "canada", "germany", "france", "japan", "australia"]
+    if region.lower() not in valid_regions:
+        print(f"❌ Invalid region '{region}'. Using default: 'united_states'")
+        region = "united_states"
+
+    # 🔹 دریافت داده‌های ترند
     try:
         trending_searches = pytrends.trending_searches(pn=region)
     except Exception as e:
