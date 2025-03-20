@@ -135,28 +135,18 @@ def fetch_youtube_trending(region_code="US", max_results=10):
 def fetch_google_trends():
     """ دریافت لیست ترندهای روز از Google Trends و ذخیره در trending_topics.json """
 
-    url = "https://trends.google.com/trends/api/dailytrends?hl=en-US&geo=US&tz=300"
-
+    pytrends = TrendReq(hl='en-US', tz=300)
+    
     try:
-        response = requests.get(url)
-        response.raise_for_status()
-
-        # حذف کاراکترهای اضافی برای تبدیل JSON به فرمت استاندارد
-        raw_data = response.text[5:]
-        trends_data = json.loads(raw_data)
-
-        # استخراج ۱۰ ترند برتر
-        trending_searches = trends_data["default"]["trendingSearchesDays"][0]["trendingSearches"][:10]
+        trending_searches = pytrends.trending_searches(pn="united_states")
 
         google_trends = []
-        for trend in trending_searches:
-            title = trend["title"]["query"]
-            popularity = trend.get("formattedTraffic", "Unknown")
-
+        for i in range(min(10, len(trending_searches))):
+            title = trending_searches.iloc[i, 0]  # دریافت عنوان ترند
             google_trends.append({
                 "title": title,
                 "source": "Google Trends",
-                "popularity": popularity
+                "popularity": "Unknown"
             })
 
         # ذخیره در فایل JSON
@@ -166,9 +156,12 @@ def fetch_google_trends():
         print(f"✅ {len(google_trends)} Google Trends saved in trending_topics.json")
         return google_trends
 
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         print(f"❌ Error fetching Google Trends: {e}")
         return []
+
+# تست تابع
+fetch_google_trends()
 
 def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
     """ دریافت پست‌های پرطرفدار از چندین Reddit subreddit و ذخیره در trending_topics.json """
