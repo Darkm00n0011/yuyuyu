@@ -132,57 +132,43 @@ def fetch_youtube_trending(region_code="US", max_results=10):
 
     return trending_topics  # 🔹 بازگرداندن داده‌ها برای استفاده احتمالی
 
-def fetch_google_trends(region="united_states"):
+def fetch_google_trends():
     """ دریافت لیست ترندهای روز از Google Trends و ذخیره در trending_topics.json """
 
-    pytrends = TrendReq(hl='en-US', tz=360)
+    url = "https://trends.google.com/trends/api/dailytrends?hl=en-US&geo=US&tz=300"
 
-    # 🔹 بررسی مقدار معتبر برای region
-    valid_regions = ["united_states", "united_kingdom", "canada", "germany", "france", "japan", "australia"]
-    if region.lower() not in valid_regions:
-        print(f"❌ Invalid region '{region}'. Using default: 'united_states'")
-        region = "united_states"
-
-    # 🔹 دریافت داده‌های ترند
     try:
-        trending_searches = pytrends.trending_searches(pn=region)
-    except Exception as e:
-        print(f"❌ Error fetching Google Trends for {region}: {e}")
-        return []
+        response = requests.get(url)
+        response.raise_for_status()
 
-    if trending_searches is None or trending_searches.empty:
-        print("❌ No Google Trends data found!")
-        return []
+        # حذف کاراکترهای اضافی برای تبدیل JSON به فرمت استاندارد
+        raw_data = response.text[5:]
+        trends_data = json.loads(raw_data)
 
-    trends = trending_searches[0].tolist()[:10]  # 🔹 فقط ۱۰ ترند برتر
-    
-    google_trends = []
-    for i, trend in enumerate(trends):
-        search_volume = None  # 🔹 مقدار اولیه حجم جستجو
-        try:
-            pytrends.build_payload([trend], timeframe="now 1-d", geo=region.upper())
-            interest_over_time = pytrends.interest_over_time()
-            if not interest_over_time.empty:
-                search_volume = int(interest_over_time.iloc[-1, 0])  # 🔹 آخرین مقدار داده‌شده
-        except Exception as e:
-            print(f"⚠️ Could not fetch interest for {trend}: {e}")
+        # استخراج ۱۰ ترند برتر
+        trending_searches = trends_data["default"]["trendingSearchesDays"][0]["trendingSearches"][:10]
 
-        popularity = search_volume if search_volume is not None else (100 - (i * 10))  # 🔹 مقدار تخمینی در صورت نبود داده
+        google_trends = []
+        for trend in trending_searches:
+            title = trend["title"]["query"]
+            popularity = trend.get("formattedTraffic", "Unknown")
 
-        google_trends.append({
-            "title": trend,
-            "source": "Google Trends",
-            "search_volume": search_volume,
-            "popularity": popularity
-        })
+            google_trends.append({
+                "title": title,
+                "source": "Google Trends",
+                "popularity": popularity
+            })
 
-    if google_trends:  # ✅ ذخیره فقط در صورت داشتن داده
+        # ذخیره در فایل JSON
         with open("trending_topics.json", "w") as file:
             json.dump(google_trends, file, indent=2)
 
         print(f"✅ {len(google_trends)} Google Trends saved in trending_topics.json")
+        return google_trends
 
-    return google_trends  # 🔹 بازگرداندن داده‌ها برای استفاده احتمالی
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Error fetching Google Trends: {e}")
+        return []
 
 def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
     """ دریافت پست‌های پرطرفدار از چندین Reddit subreddit و ذخیره در trending_topics.json """
