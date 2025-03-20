@@ -16,3 +16,4 @@ pytrends
 scipy
 torch
 bark
+pytrends
