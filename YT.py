@@ -12,8 +12,7 @@ import requests
 import json
 import pytz
 import collections
-import subprocess
-import cv2
+import re
 import numpy as np
 from datetime import datetime, time
 from pytrends.request import TrendReq
@@ -33,13 +32,13 @@ LONG_VIDEO_UPLOAD_TIME_UTC= time(12, 0)  # ساعت ۱۲ ظهر UTC
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 REFRESH_TOKEN = os.getenv("REFRESH_TOKEN")
-API_KEY = os.getenv("DEEPSEEK_API_KEY")
-if not API_KEY:
-    print("❌ Error: DEEPSEEK_API_KEY is missing! Check your environment variables.")
 VOICE_ID = "EXAVITQu4vr4xnSDxMaL"  # می‌تونی آی‌دی صدای مورد علاقه‌ات رو جایگزین کنی
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 if not YOUTUBE_API_KEY:
     print("❌ Error: YOUTUBE_API_KEY is missing! Check your environment variables.")
+
+
+
 # YouTube API URLs
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 METADATA_URL = "https://www.googleapis.com/youtube/v3/videos"
@@ -78,7 +77,13 @@ def load_trending_topics():
         print("❌ Error: JSON file is corrupted. Resetting it.")
         return load_trending_topics()  # فایل را ریست کن
 
+
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")  # 🔹 جایگزین با کلید API
+
 def fetch_youtube_trending(region_code="US", max_results=10):
+    if not YOUTUBE_API_KEY:
+        print("❌ Error: YouTube API Key is missing!")
+        return []
 
     url = "https://www.googleapis.com/youtube/v3/videos"
     params = {
@@ -86,13 +91,15 @@ def fetch_youtube_trending(region_code="US", max_results=10):
         "chart": "mostPopular",
         "regionCode": region_code,
         "maxResults": max_results,
-        "key": YOUTUBE_API_KEY  # 🔹 استفاده از API Key
+        "key": YOUTUBE_API_KEY
     }
 
-    response = requests.get(url, params=params)
-    
-    if response.status_code != 200:
-        print("❌ Error fetching trending videos:", response.json())
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()  # ❗ چک کردن خطای HTTP
+
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Request failed: {e}")
         return []
 
     trending_videos = response.json().get("items", [])
@@ -110,67 +117,36 @@ def fetch_youtube_trending(region_code="US", max_results=10):
             # 🔹 مقیاس محبوبیت بر اساس بازدید و لایک (بین ۰ تا ۱۰۰)
             popularity = min(100, (view_count // 10000) + (like_count // 500))
 
-            trending_topics.append({
-                "rank": rank,  # اضافه کردن رتبه ترند
-                "title": title,
-                "description": description,
-                "channel": channel,
-                "video_id": video_id,
-                "view_count": view_count,
-                "like_count": like_count,
-                "popularity": popularity
-            })
+            # 🔹 فقط ویدیوهای با محبوبیت بالا ذخیره شوند
+            if popularity >= 10:
+                trending_topics.append({
+                    "rank": rank,
+                    "title": title,
+                    "description": description,
+                    "channel": channel,
+                    "video_id": video_id,
+                    "view_count": view_count,
+                    "like_count": like_count,
+                    "popularity": popularity
+                })
 
         except KeyError as e:
             print(f"⚠️ Missing key {e} for video: {video.get('id', 'Unknown')}")
 
-    if trending_topics:  # ✅ فقط اگر داده‌ای وجود داشت، ذخیره کن
+    # ✅ ذخیره داده‌ها در فایل JSON
+    if trending_topics:
         with open("trending_topics.json", "w") as file:
             json.dump(trending_topics, file, indent=2)
-
         print(f"✅ {len(trending_topics)} trending topics saved in trending_topics.json")
 
-    return trending_topics  # 🔹 بازگرداندن داده‌ها برای استفاده احتمالی
-
-import json
-from pytrends.request import TrendReq
-
-def fetch_google_trends():
-    """ دریافت لیست ترندهای روز از Google Trends و ذخیره در trending_topics.json """
-
-    pytrends = TrendReq(hl='en-US', tz=300)
-
-    try:
-        # دریافت پیشنهادهای ترند بر اساس یک کلمه‌ی عمومی
-        suggestions = pytrends.suggestions(keyword="trending")
-
-        google_trends = []
-        for item in suggestions[:10]:  # فقط 10 مورد اول
-            title = item["title"]
-            google_trends.append({
-                "title": title,
-                "source": "Google Trends",
-                "popularity": "Unknown"
-            })
-
-        # ذخیره در فایل JSON
-        with open("trending_topics.json", "w") as file:
-            json.dump(google_trends, file, indent=2)
-
-        print(f"✅ {len(google_trends)} Google Trends saved in trending_topics.json")
-        return google_trends
-
-    except Exception as e:
-        print(f"❌ Error fetching Google Trends: {e}")
-        return []
-
-# تست تابع
-fetch_google_trends()
+    return trending_topics
 
 def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
     """ دریافت پست‌های پرطرفدار از چندین Reddit subreddit و ذخیره در trending_topics.json """
 
-    headers = {"User-Agent": "Mozilla/5.0"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
     reddit_trends = []
 
     for subreddit in subreddits:
@@ -178,6 +154,11 @@ def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
 
         try:
             response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code == 429:  # ❌ جلوگیری از بلاک شدن
+                print(f"⚠ Rate limit hit! Sleeping for 10 seconds...")
+                time.sleep(10)
+                continue
+
             response.raise_for_status()  # بررسی وضعیت HTTP
             data = response.json()
         except requests.exceptions.RequestException as e:
@@ -192,6 +173,8 @@ def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
             print(f"⚠ No trending posts found on r/{subreddit}!")
             continue
 
+        max_score = max((post["data"].get("score", 1) for post in posts), default=1)  # 🟢 پیدا کردن بیشترین امتیاز
+
         for post in posts:
             post_data = post["data"]
             title = post_data.get("title", "Unknown Title")
@@ -200,8 +183,8 @@ def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
             ups = post_data.get("ups", 0)
             score = post_data.get("score", 0)
 
-            # بهبود محاسبه محبوبیت (بر اساس بالاترین امتیاز در میان پست‌های دریافت شده)
-            popularity = min(100, (score / max(1, posts[0]["data"].get("score", 1))) * 100)
+            # 🟢 محاسبه محبوبیت (با حداقل 1000 امتیاز برای محبوبیت 100%)
+            popularity = min(100, (score / max(1000, max_score)) * 100)
 
             reddit_trends.append({
                 "title": title,
@@ -221,19 +204,16 @@ def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
     return reddit_trends  # 🔹 بازگرداندن داده‌ها برای استفاده در برنامه
 
 def fetch_all_trends(region_code="US", reddit_subreddits=["gaming"], reddit_limit=10, time_period="day"):
-    """ دریافت و ترکیب داده‌های ترند از یوتیوب، گوگل ترندز، و ردیت و ذخیره در trending_topics.json """
+    """ دریافت و ترکیب داده‌های ترند از یوتیوب و ردیت و ذخیره در trending_topics.json """
 
     print("🔍 Fetching YouTube Trends...")
     youtube_trends = fetch_youtube_trending(region_code)
-
-    print("🔍 Fetching Google Trends...")
-    google_trends = fetch_google_trends()
 
     print("🔍 Fetching Reddit Trends...")
     reddit_trends = fetch_reddit_trends(reddit_subreddits, reddit_limit, time_period)
 
     # ترکیب تمام ترندها در یک لیست واحد
-    all_trends = youtube_trends + google_trends + reddit_trends
+    all_trends = youtube_trends + reddit_trends
 
     # افزودن زمان آخرین به‌روزرسانی
     all_trends_data = {
@@ -250,16 +230,16 @@ def fetch_all_trends(region_code="US", reddit_subreddits=["gaming"], reddit_limi
     return all_trends
 
 print(fetch_youtube_trending())  # بررسی دریافت ترندهای یوتیوب
-print(fetch_google_trends())  # بررسی دریافت ترندهای گوگل
 print(fetch_reddit_trends())  # بررسی دریافت ترندهای ردیت
 
-
 def select_best_trending_topic(json_file="trending_topics.json"):
+    """ انتخاب بهترین موضوع ترند شده از لیست ذخیره‌شده """
 
     # تلاش برای بارگذاری داده‌های ترند
     try:
         with open(json_file, "r", encoding="utf-8") as file:
-            trends = json.load(file)
+            data = json.load(file)
+            trends = data.get("trends", [])  # استخراج لیست ترندها
     except (FileNotFoundError, json.JSONDecodeError) as e:
         print(f"❌ Error: {json_file} not found or contains invalid JSON. ({e})")
         return None
@@ -287,7 +267,7 @@ def select_best_trending_topic(json_file="trending_topics.json"):
 
     # انتخاب اولین موضوع مرتبط با یکی از کلمات کلیدی
     for topic, count in sorted_topics:
-        if any(keyword in topic.lower() for keyword in keywords):
+        if any(re.search(rf"\b{re.escape(keyword)}\b", topic, re.IGNORECASE) for keyword in keywords):
             print(f"✅ Best topic selected: {topic} (Found in {count} sources)")
             return topic
 
@@ -298,56 +278,83 @@ def select_best_trending_topic(json_file="trending_topics.json"):
     
     return best_fallback_topic
 
-# اجرای تابع
-topic = select_best_trending_topic()
-import requests
-
-import requests
-import os
-
-PIXABAY_API_KEY = "YOUR_PIXABAY_API_KEY"  # کلید API رو جایگزین کن
+# دریافت کلید API از متغیر محیطی
+PIXABAY_API_KEY = os.getenv("PIXABAY_API_KEY", "MISSING_API_KEY")
 PIXABAY_URL = "https://pixabay.com/api/videos/"
 
+if PIXABAY_API_KEY == "MISSING_API_KEY":
+    print("❌ ERROR: Pixabay API Key is missing! Set 'PIXABAY_API_KEY' in Railway environment variables.")
+
+# اجرای تابع
+topic = select_best_trending_topic()
+
 def download_best_minecraft_background(output_video="background.mp4"):
+    """ دانلود بهترین ویدیو گیم‌پلی ماینکرفت از Pixabay و ذخیره آن """
+    
+    # دریافت کلید API از متغیر محیطی
+    PIXABAY_API_KEY = os.getenv("PIXABAY_API_KEY", None)
+    PIXABAY_URL = "https://pixabay.com/api/videos/"
+
+    if not PIXABAY_API_KEY:
+        print("❌ ERROR: Pixabay API Key is missing! Set 'PIXABAY_API_KEY' in Railway environment variables.")
+        return None
+    
     params = {
         "key": PIXABAY_API_KEY,
         "q": "Minecraft gameplay",
         "video_type": "film",
-        "per_page": 5  # دریافت 5 ویدیو برتر
+        "per_page": 10  # دریافت 10 ویدیو برتر
     }
 
-    response = requests.get(PIXABAY_URL, params=params)
-    if response.status_code == 200:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
+    try:
+        response = requests.get(PIXABAY_URL, params=params, headers=headers, timeout=10)
+        response.raise_for_status()  # بررسی خطاهای HTTP
         data = response.json()
-        if not data["hits"]:
+        
+        if not data.get("hits"):
             print("❌ No Minecraft videos found on Pixabay.")
             return None
 
-        # مرتب‌سازی ویدیوها بر اساس کیفیت (رزولوشن عرضی) و طول ویدیو
+        # مرتب‌سازی ویدیوها بر اساس کیفیت (عرض) و طول ویدیو (حداقل 10 ثانیه)
         sorted_videos = sorted(
-            data["hits"], 
+            [vid for vid in data["hits"] if vid["duration"] >= 10], 
             key=lambda vid: (vid["videos"]["medium"]["width"], vid["duration"]), 
-            reverse=True  # اولویت با کیفیت ویدیو
+            reverse=True
         )
 
-        best_video = sorted_videos[0]["videos"]["medium"]["url"]  # بهترین ویدیو
+        if not sorted_videos:
+            print("❌ No suitable videos found (videos too short).")
+            return None
 
-        print(f"✅ Selected best video: {best_video}")
+        best_video_url = sorted_videos[0]["videos"]["medium"]["url"]  # لینک بهترین ویدیو
+        print(f"✅ Selected best video: {best_video_url}")
 
-        # دانلود ویدیو
-        video_response = requests.get(best_video, stream=True)
-        if video_response.status_code == 200:
-            with open(output_video, "wb") as f:
-                for chunk in video_response.iter_content(chunk_size=1024):
-                    f.write(chunk)
-            print(f"✅ Downloaded best background video: {output_video}")
-            return output_video
-        else:
-            print("❌ Error downloading video.")
-    else:
-        print("❌ Error fetching videos from Pixabay.")
-    
-    return None
+        # دانلود ویدیو با استریم
+        video_response = requests.get(best_video_url, stream=True, timeout=20)
+        video_response.raise_for_status()
+
+        with open(output_video, "wb") as f:
+            total_size = int(video_response.headers.get("content-length", 0))
+            downloaded_size = 0
+
+            for chunk in video_response.iter_content(chunk_size=1024 * 1024):  # 1MB
+                f.write(chunk)
+                downloaded_size += len(chunk)
+
+            # بررسی حجم دانلود شده
+            if total_size > 0 and downloaded_size < total_size * 0.9:  # اگر کمتر از 90٪ حجم دانلود شد
+                print("⚠ WARNING: Video download may be incomplete.")
+
+        print(f"✅ Downloaded best background video: {output_video}")
+        return output_video
+
+    except requests.RequestException as e:
+        print(f"❌ Error fetching or downloading video: {e}")
+        return None
 
 # تست دانلود بهترین ویدیو
 download_best_minecraft_background()
