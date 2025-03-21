@@ -235,18 +235,19 @@ print(fetch_reddit_trends())  # بررسی دریافت ترندهای ردیت
 def select_best_trending_topic(json_file="trending_topics.json"):
     """ انتخاب بهترین موضوع ترند شده از لیست ذخیره‌شده """
 
-    # تلاش برای بارگذاری داده‌های ترند
     try:
         with open(json_file, "r", encoding="utf-8") as file:
             data = json.load(file)
-            trends = data.get("trends", [])  # استخراج لیست ترندها
+
+            # اگر `data` دیکشنری باشه، `trends` رو بگیر، در غیر این صورت فرض کن خود `data` لیست ترندهاست
+            trends = data.get("trends", []) if isinstance(data, dict) else data  
+
     except (FileNotFoundError, json.JSONDecodeError) as e:
         print(f"❌ Error: {json_file} not found or contains invalid JSON. ({e})")
         return None
 
-    # بررسی خالی بودن لیست ترندها
-    if not trends:
-        print("❌ No trending topics found.")
+    if not trends or not isinstance(trends, list):
+        print("❌ No trending topics found or invalid format.")
         return None
 
     # فیلتر کردن داده‌های نامعتبر (باید دیکشنری باشند و کلید 'topic' را داشته باشند)
@@ -279,15 +280,16 @@ def select_best_trending_topic(json_file="trending_topics.json"):
     return best_fallback_topic
 
 # دریافت کلید API از متغیر محیطی
-PIXABAY_API_KEY = os.getenv("PIXABAY_API_KEY", "MISSING_API_KEY")
+PIXABAY_API_KEY = os.getenv("PIXABAY_API_KEY")
 PIXABAY_URL = "https://pixabay.com/api/videos/"
 
-if PIXABAY_API_KEY == "MISSING_API_KEY":
+if not PIXABAY_API_KEY:
     print("❌ ERROR: Pixabay API Key is missing! Set 'PIXABAY_API_KEY' in Railway environment variables.")
+else:
+    print(f"✅ Pixabay API Key Loaded: {PIXABAY_API_KEY[:4]}****")
 
 # اجرای تابع
 topic = select_best_trending_topic()
-
 def download_best_minecraft_background(output_video="background.mp4"):
     """ دانلود بهترین ویدیو گیم‌پلی ماینکرفت از Pixabay و ذخیره آن """
     
