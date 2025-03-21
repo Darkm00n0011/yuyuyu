@@ -395,7 +395,7 @@ def generate_video_script(topic):
         response.raise_for_status()  # Handle bad responses
 
         response_json = response.json()
-        script = response_json.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+        script = response_json.get("choices", [{}])[0].get("text", "").strip()  # FIXED HERE!
 
         if not script:
             print("❌ Error: No script received from API")
@@ -404,37 +404,28 @@ def generate_video_script(topic):
         return script
 
     except requests.exceptions.HTTPError as http_err:
-        if response.status_code == 400:
-            print("❌ Error 400: Invalid request format. Check API documentation.")
-        elif response.status_code == 401:
-            print("❌ Error 401: Authentication failed. Check your API key.")
-        elif response.status_code == 402:
-            print("❌ Error 402: Insufficient balance. Top up your account.")
-        elif response.status_code == 422:
-            print("❌ Error 422: Invalid parameters. Double-check your request body.")
-        elif response.status_code == 429:
-            print("❌ Error 429: Too many requests. Retrying in 10 seconds...")
-            time.sleep(10)  # Retry
+        error_messages = {
+            400: "Invalid request format. Check API documentation.",
+            401: "Authentication failed. Check your API key.",
+            402: "Insufficient balance. Top up your account.",
+            422: "Invalid parameters. Double-check your request body.",
+            429: "Too many requests. Retrying in 10 seconds...",
+            500: "Server error. Retrying in 5 seconds...",
+            503: "Server overloaded. Retrying in 10 seconds..."
+        }
+
+        if response.status_code in error_messages:
+            print(f"❌ Error {response.status_code}: {error_messages[response.status_code]}")
+            delay = 10 if response.status_code in [429, 503] else 5
+            time.sleep(delay)
             return generate_video_script(topic)
-        elif response.status_code == 500:
-            print("❌ Error 500: Server error. Retrying in 5 seconds...")
-            time.sleep(5)  # Retry
-            return generate_video_script(topic)
-        elif response.status_code == 503:
-            print("❌ Error 503: Server overloaded. Retrying in 10 seconds...")
-            time.sleep(10)  # Retry
-            return generate_video_script(topic)
-        else:
-            print(f"❌ HTTP Error: {http_err}")
+
+        print(f"❌ HTTP Error: {http_err}")
         return None
 
     except requests.exceptions.RequestException as req_err:
         print(f"❌ API Request Error: {req_err}")
         return None
-
-import requests
-import json
-
 def generate_video_metadata(topic):
 
     print("📝 Generating video metadata...")
