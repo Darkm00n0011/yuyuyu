@@ -1,12 +1,6 @@
-from scipy.io.wavfile import write
-from pydub import AudioSegment, effects
-from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
 import torch
-from bark import generate_audio
 import sys
 import moviepy
-print("Python path:", sys.path)
-print("MoviePy version:", moviepy.__version__)
 import os
 import requests
 import json
@@ -15,11 +9,16 @@ import collections
 import re
 import numpy as np
 from datetime import datetime, time
+from together import Together
 from pytrends.request import TrendReq
 from pydub.effects import normalize
 from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
 from moviepy.video.fx import fadein, fadeout
 from PIL import Image, ImageDraw, ImageFont
+from bark import generate_audio
+from scipy.io.wavfile import write
+from pydub import AudioSegment, effects
+from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
 
 SHORTS_DURATION=59
 LONG_VIDEO_DURATION=600
@@ -366,10 +365,14 @@ def generate_video_script(topic):
         print("❌ Error: No topic provided!")
         return None
 
-    API_KEY = os.getenv("TOGETHER_AI_API")  # Use Together AI key
-    if not API_KEY:
-        print("❌ Error: Missing TOGETHER_AI_API key!")
+    # Get API key from Railway environment variables
+    TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
+    if not TOGETHER_API_KEY:
+        print("❌ Error: Missing TOGETHER_API_KEY key!")
         return None
+
+    # Initialize the Together AI client
+    client = Together(api_key=TOGETHER_API_KEY)
 
     prompt = f"""
     Generate a high-engagement YouTube video script about "{topic}" in an engaging, viral style.
@@ -387,24 +390,16 @@ def generate_video_script(topic):
     Now, generate a **high-quality, viral** YouTube script for: "{topic}".
     """
 
-    url = "https://api.together.xyz/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "model": "mistralai/Mixtral-8x7B-Instruct",  # Best free model
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.8,
-        "max_tokens": 700
-    }
-
     try:
-        response = requests.post(url, headers=headers, json=data)
-        response.raise_for_status()  # Handle bad responses
+        response = client.chat.completions.create(
+            model="mistralai/Mixtral-8x7B-Instruct",  # Best free model
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=700
+        )
 
-        response_json = response.json()
-        script = response_json.get("choices", [{}])[0].get("text", "").strip()  # FIXED HERE!
+        # Extract the generated script
+        script = response.choices[0].message.content.strip()
 
         if not script:
             print("❌ Error: No script received from API")
@@ -412,31 +407,26 @@ def generate_video_script(topic):
 
         return script
 
-    except requests.exceptions.HTTPError as http_err:
-        error_messages = {
-            400: "Invalid request format. Check API documentation.",
-            401: "Authentication failed. Check your API key.",
-            402: "Insufficient balance. Top up your account.",
-            422: "Invalid parameters. Double-check your request body.",
-            429: "Too many requests. Retrying in 10 seconds...",
-            500: "Server error. Retrying in 5 seconds...",
-            503: "Server overloaded. Retrying in 10 seconds..."
-        }
-
-        if response.status_code in error_messages:
-            print(f"❌ Error {response.status_code}: {error_messages[response.status_code]}")
-            delay = 10 if response.status_code in [429, 503] else 5
-            time.sleep(delay)
-            return generate_video_script(topic)
-
-        print(f"❌ HTTP Error: {http_err}")
+    except Exception as e:
+        print(f"❌ API Request Error: {e}")
         return None
 
-    except requests.exceptions.RequestException as req_err:
-        print(f"❌ API Request Error: {req_err}")
-        return None
+# **📌 Test the Function**
+topic = "Minecraft Secrets"
+script = generate_video_script(topic)
+print(script)
+
+# Get API key from Railway environment variables
+TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "MISSING_API_KEY")
+
+if TOGETHER_API_KEY == "MISSING_API_KEY":
+    print("❌ ERROR: Together AI API Key is missing! Set 'TOGETHER_API_KEY' in Railway environment variables.")
+    exit(1)
+
+# Initialize the Together client with the API key
+client = Together(api_key=TOGETHER_API_KEY)
+
 def generate_video_metadata(topic):
-
     print("📝 Generating video metadata...")
 
     prompt = f"""
@@ -450,48 +440,38 @@ def generate_video_metadata(topic):
     """
 
     try:
-        url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {"Authorization": "Bearer DEEPSEEK_API_KEY"}  # جایگزین کردن با کلید DeepSeek
-        data = {
-            "model": "deepseek-chat",
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 250
-        }
+        response = client.chat.completions.create(
+            model="meta-llama/Llama-3.3-70B-Instruct-Turbo",  # Adjust the model if needed
+            messages=[{"role": "user", "content": prompt}]
+        )
 
-        response = requests.post(url, json=data, headers=headers)
+        # Extract content
+        content = response.choices[0].message.content.strip()
 
-        if response.status_code == 200:
-            content = response.json()["choices"][0]["message"]["content"].strip()
+        # Try parsing as JSON
+        try:
+            metadata = json.loads(content)
+            if not all(key in metadata for key in ["title", "description", "hashtags"]):
+                raise ValueError("Missing expected keys in JSON")
+        except (json.JSONDecodeError, ValueError):
+            print("⚠ Warning: Invalid JSON received. Using default metadata.")
+            metadata = {
+                "title": f"Awesome Video About {topic}!",
+                "description": f"This video is all about {topic}. Stay tuned for more!",
+                "hashtags": "#YouTube #Trending"
+            }
 
-            # تلاش برای تبدیل به JSON
-            try:
-                metadata = json.loads(content)
-                if not all(key in metadata for key in ["title", "description", "hashtags"]):
-                    raise ValueError("Missing expected keys in JSON")
-            except (json.JSONDecodeError, ValueError):
-                print("⚠ Warning: Invalid JSON received from DeepSeek. Using default metadata.")
-                metadata = {
-                    "title": f"Awesome Video About {topic}!",
-                    "description": f"This video is all about {topic}. Stay tuned for more!",
-                    "hashtags": "#YouTube #Trending"
-                }
-
-            print("✅ Video metadata generated successfully!")
-            return metadata
-        else:
-            print(f"❌ DeepSeek API Error: {response.text}")
-            return None
+        print("✅ Video metadata generated successfully!")
+        return metadata
 
     except Exception as e:
         print("❌ Error generating metadata:", str(e))
         return None
 
-# **📌 تست اجرا**
+# **📌 Test the Function**
 topic = "Minecraft Secrets"
 metadata = generate_video_metadata(topic)
 print(metadata)
-
-
 
 def generate_voiceover(script, output_audio="voiceover.wav"):
     try:
