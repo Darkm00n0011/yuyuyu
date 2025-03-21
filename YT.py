@@ -448,14 +448,20 @@ def generate_video_metadata(topic):
 
     try:
         response = client.chat.completions.create(
-            model="meta-llama/Meta-Llama-3.3-70B-Instruct-Turbo-Free",  # Updated model name
+            model="meta-llama/Meta-Llama-3.3-70B-Instruct-Turbo-Free",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=500
         )
 
+        # Debugging: Print raw API response
+        print("🔍 Raw API Response:", response)
+
         # Extract content
         content = response.choices[0].message.content.strip()
+
+        # Debugging: Print extracted content
+        print("📜 Extracted Content:", content)
 
         # Try parsing as JSON
         try:
@@ -481,6 +487,7 @@ def generate_video_metadata(topic):
 topic = "Minecraft Secrets"
 metadata = generate_video_metadata(topic)
 print(metadata)
+
 
 
 
