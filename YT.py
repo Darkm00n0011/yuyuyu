@@ -411,8 +411,6 @@ def generate_video_script(topic):
         print(f"❌ API Request Error: {e}")
         return None
 
-# **📌 Test the Function**
-topic = "Minecraft Secrets"
 script = generate_video_script(topic)
 print(script)
 
