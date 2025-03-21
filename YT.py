@@ -392,7 +392,7 @@ def generate_video_script(topic):
 
     try:
         response = client.chat.completions.create(
-            model="mistralai/Mixtral-8x7B-Instruct",  # Best free model
+            model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",  # Corrected model name
             messages=[{"role": "user", "content": prompt}],
             temperature=0.8,
             max_tokens=700
@@ -429,6 +429,13 @@ client = Together(api_key=TOGETHER_API_KEY)
 def generate_video_metadata(topic):
     print("📝 Generating video metadata...")
 
+    TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "MISSING_API_KEY")
+    if TOGETHER_API_KEY == "MISSING_API_KEY":
+        print("❌ ERROR: Together AI API Key is missing! Set 'TOGETHER_API_KEY' in Railway environment variables.")
+        return None
+
+    client = Together(api_key=TOGETHER_API_KEY)
+
     prompt = f"""
     Generate an engaging YouTube video title, description, and relevant hashtags for a video about "{topic}".
     
@@ -441,8 +448,10 @@ def generate_video_metadata(topic):
 
     try:
         response = client.chat.completions.create(
-            model="meta-llama/Llama-3.3-70B-Instruct-Turbo",  # Adjust the model if needed
-            messages=[{"role": "user", "content": prompt}]
+            model="meta-llama/Meta-Llama-3.3-70B-Instruct-Turbo-Free",  # Updated model name
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=500
         )
 
         # Extract content
@@ -472,6 +481,8 @@ def generate_video_metadata(topic):
 topic = "Minecraft Secrets"
 metadata = generate_video_metadata(topic)
 print(metadata)
+
+
 
 def generate_voiceover(script, output_audio="voiceover.wav"):
     try:
