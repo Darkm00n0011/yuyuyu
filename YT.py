@@ -36,6 +36,9 @@ VOICE_ID = "EXAVITQu4vr4xnSDxMaL"  # می‌تونی آی‌دی صدای مور
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 if not YOUTUBE_API_KEY:
     print("❌ Error: YOUTUBE_API_KEY is missing! Check your environment variables.")
+PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")  # گرفتن API Key از متغیر محیطی
+PEXELS_URL = "https://api.pexels.com/v1/search"
+CHANNEL_ID = "UCa4J9qWMutBboFsyqd-pS2A"
 
 
 
@@ -43,8 +46,6 @@ if not YOUTUBE_API_KEY:
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 METADATA_URL = "https://www.googleapis.com/youtube/v3/videos"
 UPLOAD_URL = "https://www.googleapis.com/upload/youtube/v3/videos"
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 # تنظیم منطقه زمانی به Eastern Time (ET)
 EST = pytz.timezone('America/New_York')
@@ -59,34 +60,6 @@ SHORT_VIDEO_FILE = "short_video.mp4"  # ویدیوی Shorts
 # تعداد آپلودها در روز
 MAX_LONG_UPLOADS = 1  # فقط 1 ویدیوی بلند در روز
 MAX_SHORTS_UPLOADS = 1  # فقط 1 Shorts در روز
-
-def load_trending_topics():
-    file_path = "trending_topics.json"
-    if not os.path.exists(file_path) or os.stat(file_path).st_size == 0:
-        # مقدار پیش‌فرض اگر فایل وجود ندارد یا خالی است
-        default_data = [
-            {"title": "Minecraft Secrets", "popularity": 95},
-            {"title": "AI in 2025", "popularity": 90}
-        ]
-        with open(file_path, "w") as file:
-            json.dump(default_data, file, indent=4)
-        return default_data  # مقدار پیش‌فرض را برگردان
-
-    try:
-        with open(file_path, "r") as file:
-            return json.load(file)
-    except json.JSONDecodeError:
-        print("❌ Error: JSON file is corrupted. Resetting it.")
-        return load_trending_topics()  # فایل را ریست کن
-
-
-YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")  # 🔹 جایگزین با کلید API
-
-# دریافت API Keys از محیط
-YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
-
-# اتصال به Supabase
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def fetch_youtube_trending(region_code="US", max_results=10):
     if not YOUTUBE_API_KEY:
@@ -104,14 +77,13 @@ def fetch_youtube_trending(region_code="US", max_results=10):
 
     try:
         response = requests.get(url, params=params)
-        response.raise_for_status()  # ❗ چک کردن خطای HTTP
+        response.raise_for_status()
+        trending_videos = response.json().get("items", [])
     except requests.exceptions.RequestException as e:
         print(f"❌ Request failed: {e}")
         return []
 
-    trending_videos = response.json().get("items", [])
     trending_topics = []
-
     for rank, video in enumerate(trending_videos, start=1):
         try:
             title = video["snippet"]["title"]
@@ -122,10 +94,10 @@ def fetch_youtube_trending(region_code="US", max_results=10):
             like_count = int(video["statistics"].get("likeCount", 0))
             thumbnail = video["snippet"]["thumbnails"]["high"]["url"]
 
-            # 🔹 مقیاس محبوبیت بر اساس بازدید و لایک (بین ۰ تا ۱۰۰)
+            # مقیاس محبوبیت بر اساس بازدید و لایک (بین ۰ تا ۱۰۰)
             popularity = min(100, (view_count // 10000) + (like_count // 500))
 
-            # 🔹 فقط ویدیوهای با محبوبیت بالا ذخیره شوند
+            # فقط ویدیوهای با محبوبیت بالا در نظر گرفته شوند
             if popularity >= 10:
                 trending_topics.append({
                     "rank": rank,
@@ -139,44 +111,19 @@ def fetch_youtube_trending(region_code="US", max_results=10):
                     "thumbnail": thumbnail,
                     "region": region_code
                 })
-
         except KeyError as e:
             print(f"⚠️ Missing key {e} for video: {video.get('id', 'Unknown')}")
 
     if not trending_topics:
         print("⚠ No trending videos found with enough popularity.")
-        return []
-
-    # 🚀 بررسی اینکه کدام ویدیوها از قبل ذخیره نشده‌اند
-    existing_videos = supabase.table("youtube_trends").select("video_id").execute()
-    existing_video_ids = {entry["video_id"] for entry in existing_videos.data} if existing_videos.data else set()
-
-    new_entries = [video for video in trending_topics if video["video_id"] not in existing_video_ids]
-
-    if new_entries:
-        # ✅ ذخیره در Supabase
-        response = supabase.table("youtube_trends").insert(new_entries).execute()
-
-        if response.get("status_code") == 201:
-            print(f"✅ {len(new_entries)} new YouTube trends saved to Supabase")
-        else:
-            print("❌ Error saving YouTube trends:", response.get("error"))
-    else:
-        print("✅ No new trending videos to save.")
-
-    # ✅ ذخیره داده‌ها در فایل JSON
-    with open("trending_topics.json", "w") as file:
-        json.dump(trending_topics, file, indent=2)
     
-    print(f"✅ {len(trending_topics)} trending topics saved in trending_topics.json")
-
     return trending_topics
 
 # 📌 تست تابع
 print(fetch_youtube_trending())
 
 def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
-    """ دریافت پست‌های پرطرفدار از چندین Reddit subreddit و ذخیره در Supabase """
+    """ دریافت پست‌های پرطرفدار از چندین Reddit subreddit بدون ذخیره‌سازی """
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -188,17 +135,17 @@ def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
 
         try:
             response = requests.get(url, headers=headers, timeout=10)
-            if response.status_code == 429:  # ❌ جلوگیری از بلاک شدن
+            if response.status_code == 429:  # جلوگیری از بلاک شدن
                 print(f"⚠ Rate limit hit! Sleeping for 10 seconds...")
                 time.sleep(10)
                 continue
 
-            response.raise_for_status()  # بررسی وضعیت HTTP
+            response.raise_for_status()
             data = response.json()
         except requests.exceptions.RequestException as e:
             print(f"❌ Error fetching Reddit trends for {subreddit}: {e}")
             continue
-        except json.JSONDecodeError:
+        except ValueError:
             print(f"❌ Error decoding JSON response from Reddit ({subreddit})!")
             continue
 
@@ -207,17 +154,16 @@ def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
             print(f"⚠ No trending posts found on r/{subreddit}!")
             continue
 
-        max_score = max((post["data"].get("score", 1) for post in posts), default=1)  # 🟢 پیدا کردن بیشترین امتیاز
+        max_score = max((post["data"].get("score", 1) for post in posts), default=1)
 
         for post in posts:
             post_data = post["data"]
             title = post_data.get("title", "Unknown Title")
             post_id = post_data.get("id", "")
             url = f"https://www.reddit.com{post_data.get('permalink', '')}"
-            ups = post_data.get("ups", 0)
             score = post_data.get("score", 0)
 
-            # 🟢 محاسبه محبوبیت (با حداقل 1000 امتیاز برای محبوبیت 100%)
+            # محاسبه محبوبیت (با حداقل 1000 امتیاز برای محبوبیت 100%)
             popularity = min(100, (score / max(1000, max_score)) * 100)
 
             reddit_trends.append({
@@ -226,36 +172,12 @@ def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
                 "url": url,
                 "subreddit": subreddit,
                 "source": "Reddit",
-                "popularity": round(popularity, 2)  # مقدار را تا دو رقم اعشار ذخیره می‌کنیم
+                "popularity": round(popularity, 2)
             })
 
     if not reddit_trends:
         print("⚠ No Reddit trends found with enough popularity.")
-        return []
-
-    # 🚀 بررسی اینکه کدام پست‌ها از قبل ذخیره نشده‌اند
-    existing_posts = supabase.table("reddit_trends").select("post_id").execute()
-    existing_post_ids = {entry["post_id"] for entry in existing_posts.data} if existing_posts.data else set()
-
-    new_entries = [post for post in reddit_trends if post["post_id"] not in existing_post_ids]
-
-    if new_entries:
-        # ✅ ذخیره در Supabase
-        response = supabase.table("reddit_trends").insert(new_entries).execute()
-
-        if response.get("status_code") == 201:
-            print(f"✅ {len(new_entries)} new Reddit trends saved to Supabase")
-        else:
-            print("❌ Error saving Reddit trends:", response.get("error"))
-    else:
-        print("✅ No new Reddit trends to save.")
-
-    # ✅ ذخیره داده‌ها در فایل JSON
-    with open("trending_topics.json", "w") as file:
-        json.dump(reddit_trends, file, indent=2)
     
-    print(f"✅ {len(reddit_trends)} Reddit trends saved in trending_topics.json")
-
     return reddit_trends
 
 # 📌 تست تابع
@@ -265,7 +187,7 @@ from fetch_youtube import fetch_youtube_trending
 from fetch_reddit import fetch_reddit_trends
 
 def fetch_all_trends(region_code="US", reddit_subreddits=["gaming"], reddit_limit=10, time_period="day"):
-    """ دریافت و ترکیب داده‌های ترند از یوتیوب و ردیت و ذخیره در Supabase """
+    """ دریافت و ترکیب داده‌های ترند از یوتیوب و ردیت بدون ذخیره‌سازی """
 
     print("🔍 Fetching YouTube Trends...")
     youtube_trends = fetch_youtube_trending(region_code)
@@ -278,50 +200,15 @@ def fetch_all_trends(region_code="US", reddit_subreddits=["gaming"], reddit_limi
 
     if not all_trends:
         print("⚠ No trending data found.")
-        return []
-
-    # 🚀 دریافت IDهای موجود در دیتابیس برای جلوگیری از تکرار
-    existing_trends = supabase.table("trending_topics").select("source_id").execute()
-    existing_ids = {item["source_id"] for item in existing_trends.data} if existing_trends.data else set()
-
-    # ✅ فیلتر کردن ترندهای جدید
-    new_trends = [trend for trend in all_trends if trend["video_id"] not in existing_ids]
-
-    if new_trends:
-        # ✅ ذخیره داده‌های جدید در Supabase
-        response = supabase.table("trending_topics").insert(new_trends).execute()
-
-        if response.get("status_code") == 201:
-            print(f"✅ {len(new_trends)} new trends saved to Supabase")
-        else:
-            print("❌ Error saving trends:", response.get("error"))
-    else:
-        print("✅ No new trends to save.")
-
-    # ✅ ذخیره تاریخ آخرین بروزرسانی
-    supabase.table("metadata").upsert({"key": "last_updated", "value": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}).execute()
-
-    # ✅ ذخیره در فایل JSON
-    with open("trending_topics.json", "w") as file:
-        json.dump({"last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "trends": all_trends}, file, indent=2)
-
-    print(f"✅ {len(all_trends)} trends saved in trending_topics.json")
-
+    
     return all_trends
 
 # 📌 تست تابع
 print(fetch_all_trends())
 
-def select_best_trending_topic(json_file="trending_topics.json"):
-    """ انتخاب بهترین موضوع ترند شده از لیست یوتیوب و ردیت، بر اساس تعداد تکرار و محبوبیت """
 
-    try:
-        with open(json_file, "r", encoding="utf-8") as file:
-            data = json.load(file)
-            trends = data.get("trends", []) if isinstance(data, dict) else data  
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        print(f"❌ Error: {json_file} not found or contains invalid JSON. ({e})")
-        return None
+def select_best_trending_topic(trends):
+    """ انتخاب بهترین موضوع ترند شده از لیست یوتیوب و ردیت، بر اساس تعداد تکرار و محبوبیت """
 
     if not trends or not isinstance(trends, list):
         print("❌ No trending topics found or invalid format.")
@@ -370,10 +257,11 @@ def select_best_trending_topic(json_file="trending_topics.json"):
     return best_fallback_topic
 
 # 🚀 اجرای تابع
-best_topic = select_best_trending_topic()
+trending_data = fetch_all_trends()
+best_topic = select_best_trending_topic(trending_data)
 
 def download_best_minecraft_background(output_video="background.mp4"):
-    """ دانلود بهترین ویدیو گیم‌پلی ماینکرفت از Pixabay و ذخیره آن """
+   #دانلود بهترین ویدیو گیم‌پلی ماینکرفت از Pixabay و ذخیره آن
     
     # دریافت کلید API از متغیر محیطی
     PIXABAY_API_KEY = os.getenv("PIXABAY_API_KEY", None)
@@ -573,148 +461,268 @@ print(metadata)
 
 
 def generate_voiceover(script, output_audio="voiceover.wav"):
+    if not script or not isinstance(script, str):
+        print("❌ Error: Invalid script provided!")
+        return None
+
     try:
         audio_array = generate_audio(script)  # Bark-based voice generation
+        
+        if not isinstance(audio_array, np.ndarray) or audio_array.size == 0:
+            print("❌ Error: No audio generated.")
+            return None
+        
         sample_rate = 24000
         write(output_audio, sample_rate, np.array(audio_array * 32767, dtype=np.int16))
+        
+        print(f"✅ Voiceover generated successfully: {output_audio}")
         return output_audio
+
     except Exception as e:
         print(f"❌ Error generating voiceover: {str(e)}")
         return None
 
 def generate_video(voiceover, background_video, output_video="final_video.mp4"):
+    if not os.path.isfile(voiceover):
+        print(f"❌ Error: Voiceover file not found ({voiceover})")
+        return None
+
+    if not os.path.isfile(background_video):
+        print(f"❌ Error: Background video file not found ({background_video})")
+        return None
+
     try:
-        command = f"ffmpeg -i {background_video} -i {voiceover} -c:v copy -c:a aac {output_video}"
-        subprocess.run(command, shell=True, check=True)
+        command = [
+            "ffmpeg", "-y",
+            "-i", background_video,
+            "-i", voiceover,
+            "-c:v", "copy",
+            "-c:a", "aac",
+            output_video
+        ]
+        subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        if not os.path.isfile(output_video):
+            print("❌ Error: Video file not created.")
+            return None
+
+        print(f"✅ Video generated successfully: {output_video}")
         return output_video
+
+    except subprocess.CalledProcessError as e:
+        print(f"❌ FFmpeg Error: {e.stderr.decode('utf-8', errors='ignore')}")
+        return None
     except Exception as e:
-        print("❌ Error generating video:", str(e))
+        print(f"❌ Unexpected error: {str(e)}")
         return None
 
 def enhance_audio(input_audio, output_audio="enhanced_voiceover.mp3"):
+    if not os.path.isfile(input_audio):
+        print(f"❌ Error: Input audio file not found ({input_audio})")
+        return None
+
     try:
         audio = AudioSegment.from_file(input_audio)
+
+        # نرمال‌سازی صدا برای بالانس کردن حجم صدا
         enhanced_audio = effects.normalize(audio)
-        enhanced_audio.export(output_audio, format="mp3")
+
+        # حذف نویز‌های کم‌دامنه (فیلتر high-pass)
+        enhanced_audio = enhanced_audio.high_pass_filter(100)
+
+        # تنظیم مقدار بلندی صدا در حد متعادل
+        target_dBFS = -14.0
+        change_in_dBFS = target_dBFS - enhanced_audio.dBFS
+        enhanced_audio = enhanced_audio.apply_gain(change_in_dBFS)
+
+        # ذخیره خروجی با کیفیت بالا
+        enhanced_audio.export(output_audio, format="mp3", bitrate="192k")
+
+        if not os.path.isfile(output_audio):
+            print("❌ Error: Enhanced audio file not created.")
+            return None
+
+        print(f"✅ Enhanced audio saved: {output_audio}")
         return output_audio
+
     except Exception as e:
         print(f"❌ Error enhancing audio: {e}")
         return None
 
 def enhance_video(input_video, output_video="enhanced_video.mp4"):
+    if not os.path.isfile(input_video):
+        print(f"❌ Error: Input video file not found ({input_video})")
+        return None
+
     try:
         clip = VideoFileClip(input_video)
-        title_text = TextClip("🔥 Minecraft Fact!", fontsize=70, color="white").set_position("center").set_duration(3)
+
+        # ایجاد متن عنوان با پس‌زمینه‌ی نیمه‌شفاف
+        title_text = (TextClip("🔥 Minecraft Fact!", fontsize=70, font="Arial-Bold", color="white", stroke_color="black", stroke_width=3)
+                      .set_position(("center", "top"))
+                      .set_duration(3))
+
+        # ترکیب متن با ویدیو
         final_clip = CompositeVideoClip([clip, title_text])
-        final_clip.write_videofile(output_video, codec="libx264", fps=30)
+
+        # ذخیره خروجی با کیفیت بالا
+        final_clip.write_videofile(output_video, codec="libx264", fps=30, threads=4, preset="ultrafast")
+
+        if not os.path.isfile(output_video):
+            print("❌ Error: Enhanced video file not created.")
+            return None
+
+        print(f"✅ Enhanced video saved: {output_video}")
         return output_video
+
     except Exception as e:
         print(f"❌ Error enhancing video: {e}")
         return None
 
 def add_video_effects(input_video, output_video="final_video_with_effects.mp4"):
-    
-    #اضافه کردن افکت‌های تصویری، ترنزیشن‌ها و متن‌های گرافیکی به ویدیو
-    
     print("🎬 Adding effects to video...")
 
-    # بارگذاری ویدیو اصلی
-    clip = VideoFileClip(input_video)
+    if not os.path.isfile(input_video):
+        print(f"❌ Error: Input video file not found ({input_video})")
+        return None
 
-    # ایجاد متن گرافیکی متحرک
-    txt_clip = TextClip("🔥 Amazing Minecraft Fact!", fontsize=80, color='yellow', font="Impact-Bold")
-    txt_clip = txt_clip.set_position(("center", "top")).set_duration(3)  # نمایش برای ۳ ثانیه
-
-    # ترکیب ویدیو و متن
-    final = CompositeVideoClip([clip, txt_clip])
-
-    # ذخیره ویدیو
-    final.write_videofile(output_video, codec="libx264", fps=30)
-    print(f"✅ Video with effects saved as {output_video}")
-    return output_video
-
-def generate_thumbnail(topic, output_file="thumbnail.png"):
-    
-    #تولید تامبنیل جذاب برای ویدیو، ابتدا با DALL·E، و در صورت خطا، با یک تصویر پیش‌فرض.
-    
-    print("🖼 Generating thumbnail...")
-
-    # تلاش برای تولید تصویر با DALL·E
     try:
-        response = openai.Image.create(
-            model="dall-e-3",
-            prompt=f"Create a high-quality YouTube thumbnail for a video about {topic}. It should be colorful, eye-catching, and engaging.",
-            n=1,
-            size="1024x1024"
-        )
+        # بارگذاری ویدیو
+        clip = VideoFileClip(input_video)
 
-        if "data" in response and response["data"]:
-            image_url = response["data"][0]["url"]
-            if image_url:
-                img = Image.open(requests.get(image_url, stream=True).raw)
-                print("✅ Thumbnail generated using DALL·E!")
-            else:
-                raise Exception("DALL·E did not return a valid image URL.")
-        else:
-            raise Exception("DALL·E API returned an empty response.")
+        # ایجاد متن گرافیکی متحرک با افکت استروک (حاشیه مشکی برای خوانایی بهتر)
+        txt_clip = (TextClip("🔥 Amazing Minecraft Fact!", fontsize=80, color='yellow', font="Arial-Bold",
+                             stroke_color="black", stroke_width=5)
+                    .set_position(("center", "top"))
+                    .set_duration(3)
+                    .fadein(0.5).fadeout(0.5))  # افکت محو شدن در ابتدا و انتها
+
+        # ترکیب ویدیو و متن
+        final_clip = CompositeVideoClip([clip, txt_clip])
+
+        # ذخیره ویدیو با تنظیمات بهینه
+        final_clip.write_videofile(output_video, codec="libx264", fps=30, threads=4, preset="ultrafast")
+
+        if not os.path.isfile(output_video):
+            print("❌ Error: Video with effects was not created.")
+            return None
+
+        print(f"✅ Video with effects saved: {output_video}")
+        return output_video
 
     except Exception as e:
-        print(f"⚠ DALL·E failed: {e}")
-        print("🖼 Using default background for thumbnail...")
-        img = Image.open("thumbnail_bg.jpg").resize((1280, 720))
+        print(f"❌ Error adding effects to video: {e}")
+        return None
 
-    # ایجاد متن روی تصویر
+def generate_thumbnail(topic, output_file="thumbnail.jpg"):
+    print("🖼 Generating thumbnail using Pexels...")
+
+    if not PEXELS_API_KEY:
+        print("❌ ERROR: Pexels API Key is missing! Set 'PEXELS_API_KEY' in environment variables.")
+        return None
+
+    # 🔍 جستجوی تصویر مرتبط در Pexels
+    headers = {"Authorization": PEXELS_API_KEY}
+    params = {"query": topic, "per_page": 1}
+    response = requests.get(PEXELS_URL, headers=headers, params=params)
+
+    if response.status_code != 200:
+        print("❌ ERROR: Failed to fetch image from Pexels!")
+        return None
+
+    data = response.json()
+    if "photos" not in data or len(data["photos"]) == 0:
+        print("⚠ No images found for this topic. Using default image.")
+        return None
+
+    image_url = data["photos"][0]["src"]["large"]
+    
+    # 📥 دانلود تصویر
+    img = Image.open(requests.get(image_url, stream=True).raw)
+
+    # 🖌 اضافه کردن متن روی تصویر
     draw = ImageDraw.Draw(img)
-    font = ImageFont.truetype("impact.ttf", 90)
-    text_position = (100, 550)
-
-    # افکت استروک برای خوانایی بهتر
+    font = ImageFont.truetype("impact.ttf", 90)  # فونت اینستاگرامی معروف
+    text_position = (100, img.height - 150)
+    
+    # 🖌 افکت استروک برای خوانایی بهتر
     for offset in range(-3, 4, 2):
         draw.text((text_position[0] + offset, text_position[1]), topic, font=font, fill="black")
         draw.text((text_position[0], text_position[1] + offset), topic, font=font, fill="black")
 
     draw.text(text_position, topic, font=font, fill="yellow")
 
-    # ذخیره‌ی تصویر نهایی
+    # 💾 ذخیره‌ی تامبنیل نهایی
     img.save(output_file)
     print(f"✅ Thumbnail saved as {output_file}")
     return output_file
 
+# **🎯 تست**
+topic = "Minecraft Secrets"
+generate_thumbnail(topic)
+
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")  # باید API Key ست بشه
+
 def analyze_past_videos():
+    print("📊 Analyzing past video performance...")
 
-    #تحلیل داده‌های عملکرد ویدیوهای قبلی و بهینه‌سازی استراتژی محتوا
-
-    analytics_file = "video_analytics.json"
-
-    if not os.path.exists(analytics_file):
-        print("⚠ No past video analytics found.")
+    if not YOUTUBE_API_KEY:
+        print("❌ ERROR: YouTube API Key is missing! Set 'YOUTUBE_API_KEY' in environment variables.")
         return None
 
-    with open(analytics_file, "r") as file:
-        try:
-            data = json.load(file)
-            if not isinstance(data, dict):
-                print("⚠ Invalid analytics data format.")
-                return None
-        except json.JSONDecodeError:
-            print("⚠ Error reading analytics file.")
-            return None
+    # دریافت اطلاعات کانال (بدون نیاز به CHANNEL_ID)
+    channel_url = f"https://www.googleapis.com/youtube/v3/channels?part=contentDetails&mine=true&key={YOUTUBE_API_KEY}"
+    channel_response = requests.get(channel_url)
 
-    best_videos = sorted(
-        [(vid, stats) for vid, stats in data.items() if "engagement_rate" in stats],
-        key=lambda x: x[1]["engagement_rate"],
-        reverse=True
-    )
-
-    if not best_videos:
-        print("⚠ No valid engagement data found.")
+    if channel_response.status_code != 200:
+        print("❌ ERROR: Failed to fetch channel details!")
         return None
 
-    print("\n📊 **Top Performing Videos:**")
-    for video_id, stats in best_videos[:5]:
-        print(f"- Video ID: {video_id}, Engagement Rate: {stats['engagement_rate']:.2%}")
+    uploads_playlist_id = channel_response.json()["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
 
-    return best_videos
+    # دریافت لیست ویدیوها از آپلودهای کانال
+    url = f"https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&playlistId={uploads_playlist_id}&maxResults=20&key={YOUTUBE_API_KEY}"
+    response = requests.get(url)
+
+    if response.status_code != 200:
+        print("❌ ERROR: Failed to fetch video list from YouTube!")
+        return None
+
+    video_ids = [item["contentDetails"]["videoId"] for item in response.json().get("items", [])]
+
+    if not video_ids:
+        print("⚠ No videos found.")
+        return None
+
+    # دریافت آمار ویدیوها
+    stats_url = f"https://www.googleapis.com/youtube/v3/videos?part=statistics&id={','.join(video_ids)}&key={YOUTUBE_API_KEY}"
+    stats_response = requests.get(stats_url)
+
+    if stats_response.status_code != 200:
+        print("❌ ERROR: Failed to fetch video stats!")
+        return None
+
+    stats_data = stats_response.json().get("items", [])
+
+    engagement_data = []
+    for video in stats_data:
+        vid_id = video["id"]
+        stats = video["statistics"]
+
+        likes = int(stats.get("likeCount", 0))
+        comments = int(stats.get("commentCount", 0))
+        views = int(stats.get("viewCount", 1))  # جلوگیری از تقسیم بر صفر
+
+        engagement_rate = (likes + comments) / views
+        engagement_data.append((vid_id, engagement_rate))
+
+    best_videos = sorted(engagement_data, key=lambda x: x[1], reverse=True)
+
+    print("\n🔥 **Top Performing Videos:**")
+    for vid_id, rate in best_videos[:5]:
+        print(f"- Video ID: {vid_id}, Engagement Rate: {rate:.2%}")
+
+    return best_videos[:5]
 
 def suggest_improvements():
     
@@ -743,190 +751,104 @@ def suggest_improvements():
     script= generate_video_script(topic)
 
 def check_copyright_violation(script):
-    
-    #بررسی متن تولید شده برای جلوگیری از کپی‌رایت.
     prompt = f"""
-    Please analyze the following script for any copyright violations, plagiarism, or YouTube policy violations.
-    If the script is safe, return "SAFE".
-    If the script contains potential copyright or policy issues, return a short explanation.
+    Analyze the following script for potential copyright violations or plagiarism.
+    - If the script is 100% original and safe, return: "SAFE".
+    - If there are any potential copyright risks, return a short explanation.
 
     Script:
     {script}
     """
-
+    
     try:
         response = client.chat.completions.create(
-         model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",  # یا "o3-mini"
-         messages=[{"role": "user", "content": prompt}],
-         max_tokens=250
-)
-   
-        result = response["choices"][0]["message"]["content"]
-
-        if "SAFE" in result:
-            print("✅ Script is safe.")
-            return True
-        else:
-            print(f"⚠ Potential issue detected: {result}")
-            return False
-    except Exception as e:
-        print("❌ Error checking copyright:", str(e))
-        return True  # اگر چکینگ انجام نشد، اجازه ادامه بده
-
-script = generate_video_script(topic)
-if not script:
-    print("❌ Script generation failed. Skipping video creation.")
-    exit()  # Stop execution
-
-
-# استفاده از این بررسی در روند تولید متن
-if script and check_copyright_violation(script):
-    with open("video_script.txt", "w") as file:
-        file.write(script)
-    print("📜 Video script saved successfully!")
-else:
-    print("❌ Script rejected due to potential copyright or policy violations.")
-
-def check_youtube_policy(title, description):
-    
-    #بررسی عنوان و توضیحات برای اطمینان از عدم نقض قوانین یوتیوب.
-    
-    prompt = f"""
-    Please analyze the following YouTube video metadata to check if it violates YouTube's policies.
-    If it's safe, return "SAFE".
-    If there is a potential issue, return a short explanation.
-
-    Title: {title}
-    Description: {description}
-    """
-
-    try:
-        response = client.chat.completions.create(
-          model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",  # یا "o3-mini"
-          messages=[{"role": "user", "content": prompt}],
-          max_tokens=250
-)
-
-        result = response["choices"][0]["message"]["content"]
-
-        if "SAFE" in result:
-            print("✅ Metadata is safe.")
-            return True
-        else:
-            print(f"⚠ Potential policy issue detected: {result}")
-            return False
-    except Exception as e:
-        print("❌ Error checking YouTube policy:", str(e))
-        return True
-video_metadata = generate_video_metadata(topic)
-# بررسی قبل از آپلود
-if video_metadata and check_youtube_policy(video_metadata["title"], video_metadata["description"]):
-    upload_video(enhanced_video, video_id)
-else:
-    print("❌ Video upload blocked due to policy violation.")
-
-def check_audio_copyright(audio_file):
-    
-    #بررسی اینکه آیا موسیقی یا صداگذاری استفاده شده کپی‌رایت دارد یا خیر.
-    
-    prompt = f"""
-    Please analyze the following audio file and determine if it contains copyrighted music or speech.
-    If it's safe, return "SAFE".
-    If there is a potential copyright issue, return a short explanation.
-
-    Audio file: {audio_file}
-    """
-
-
-
-
-
-    try:
-        response = openai.ChatCompletion.create(
             model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=100
+            max_tokens=250
         )
         result = response["choices"][0]["message"]["content"]
-
+        
         if "SAFE" in result:
-            print("✅ Audio is safe.")
             return True
         else:
             print(f"⚠ Potential copyright issue detected: {result}")
             return False
     except Exception as e:
-        print("❌ Error checking audio copyright:", str(e))
-        return True
+        print("❌ Error checking copyright:", str(e))
+        return True  # اگر نتوانست بررسی کند، اجازه می‌دهیم ادامه دهد
 
-# بررسی قبل از اضافه کردن موسیقی یا صداگذاری
-if check_audio_copyright("voiceover.mp3"):
-    enhanced_voiceover = enhance_audio("voiceover.mp3")
-else:
-    print("❌ Audio rejected due to potential copyright violation.")
 
-def check_video_content(video_file):
-    
-    #بررسی محتوای ویدیو برای محتوای حساس یا ممنوعه.
-    
+def check_and_fix_youtube_metadata(video_metadata):
+    """
+    بررسی و اصلاح خودکار متادیتای یوتیوب قبل از آپلود.
+    """
+    title = video_metadata["title"]
+    description = video_metadata["description"]
+
     prompt = f"""
-    Please analyze the following video file and determine if it contains sensitive, inappropriate, or copyrighted content.
-    If it's safe, return "SAFE".
-    If there is a potential issue, return a short explanation.
-
-    Video file: {video_file}
+    Analyze the following YouTube video metadata to ensure it fully complies with YouTube’s policies.
+    - If it's 100% safe, return: "SAFE".
+    - If it contains potential violations, rewrite it to make it fully compliant.
+    
+    Title: {title}
+    Description: {description}
+    
+    If you rewrite it, return ONLY the fixed metadata in this format:
+    Title: [NEW TITLE]
+    Description: [NEW DESCRIPTION]
     """
 
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=100
+            max_tokens=300
         )
         result = response["choices"][0]["message"]["content"]
 
         if "SAFE" in result:
-            print("✅ Video content is safe.")
-            return True
-        else:
-            print(f"⚠ Potential issue detected: {result}")
-            return False
+            print("✅ Metadata is safe.")
+            return video_metadata  # بدون تغییر ادامه بده
+
+        # استخراج عنوان و توضیحات جدید از پاسخ مدل
+        fixed_title = result.split("Title: ")[1].split("\n")[0]
+        fixed_description = result.split("Description: ")[1].strip()
+
+        print(f"✅ Fixed Title: {fixed_title}")
+        print(f"✅ Fixed Description: {fixed_description}")
+
+        # جایگزینی متادیتای اصلاح‌شده
+        video_metadata["title"] = fixed_title
+        video_metadata["description"] = fixed_description
+
+        return video_metadata  # با متادیتای اصلاح‌شده ادامه بده
+
     except Exception as e:
-        print("❌ Error checking video content:", str(e))
-        return True
+        print("❌ Error checking/fixing metadata:", str(e))
+        return video_metadata  # اگر خطا پیش آمد، آپلود را متوقف نکن
 
-# بررسی قبل از آپلود ویدیو
-if check_video_content("final_video.mp4"):
-    upload_video(enhanced_video, video_id)
-else:
-    print("❌ Video upload blocked due to potential violation.")
+# استفاده از بررسی و اصلاح خودکار قبل از آپلود
+video_metadata = generate_video_metadata(topic)
+video_metadata = check_and_fix_youtube_metadata(video_metadata)
 
-# بررسی اینکه امروز چند ویدیو آپلود شده
+upload_video(enhanced_video, video_metadata)
+
 def check_upload_limit():
-    today = datetime.now(EST).strftime('%Y-%m-%d')
+    today = datetime.now(timezone.utc).isoformat()[:10]  # تاریخ امروز به فرمت YYYY-MM-DD
 
-    # اگر فایل لاگ وجود نداشت، بساز
-    if not os.path.exists(UPLOAD_LOG_FILE):
-        with open(UPLOAD_LOG_FILE, "w") as file:
-            json.dump({"date": today, "long_videos": 0, "shorts": 0}, file)
+    url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&channelId={CHANNEL_ID}&maxResults=50&order=date&type=video&publishedAfter={today}T00:00:00Z&key={YOUTUBE_API_KEY}"
+    response = requests.get(url)
 
-    # مقدار آپلودهای قبلی را بخوان
-    with open(UPLOAD_LOG_FILE, "r") as file:
-        data = json.load(file)
+    if response.status_code != 200:
+        print("❌ ERROR: Failed to fetch upload history from YouTube!")
+        return {"long_videos": 0, "shorts": 0}  # در صورت خطا، فرض می‌کنیم هیچ ویدیویی آپلود نشده
 
-    # اگر تاریخ تغییر کرده، لاگ را ریست کن
-    if data["date"] != today:
-        data = {"date": today, "long_videos": 0, "shorts": 0}
+    videos = response.json().get("items", [])
 
-    return data
+    long_videos = sum(1 for v in videos if "shorts" not in v["snippet"]["title"].lower())  # تشخیص ویدیوهای عادی
+    shorts = sum(1 for v in videos if "shorts" in v["snippet"]["title"].lower())  # تشخیص YouTube Shorts
 
-# ذخیره‌ی تعداد آپلودها
-def log_upload(video_type):
-    data = check_upload_limit()
-    data[video_type] += 1  # تعداد آپلودهای نوع موردنظر را افزایش بده
-
-    with open(UPLOAD_LOG_FILE, "w") as file:
-        json.dump(data, file)
+    return {"long_videos": long_videos, "shorts": shorts}
 
 # بررسی ساعت مجاز برای آپلود
 def get_upload_type():
