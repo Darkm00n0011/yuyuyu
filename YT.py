@@ -446,7 +446,7 @@ def generate_video_metadata(topic):
 
     try:
         response = client.chat.completions.create(
-            model="meta-llama/Meta-Llama-3.3-70B-Instruct-Turbo-Free",
+            model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=500
