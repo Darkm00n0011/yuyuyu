@@ -249,15 +249,15 @@ def select_best_trending_topic(json_file="trending_topics.json"):
         print("❌ No trending topics found or invalid format.")
         return None
 
-    # فیلتر کردن داده‌های نامعتبر (باید دیکشنری باشند و کلید 'topic' را داشته باشند)
-    valid_trends = [t for t in trends if isinstance(t, dict) and "topic" in t]
+    # فیلتر کردن داده‌های نامعتبر (باید دیکشنری باشند و کلید 'title' را داشته باشند)
+    valid_trends = [t for t in trends if isinstance(t, dict) and "title" in t]
 
     if not valid_trends:
         print("❌ No valid trending topics found.")
         return None
 
-    # شمارش تعداد تکرار هر موضوع
-    topic_count = collections.Counter([t["topic"] for t in valid_trends])
+    # شمارش تعداد تکرار هر عنوان
+    topic_count = collections.Counter([t["title"] for t in valid_trends])
 
     # مرتب‌سازی بر اساس بیشترین تکرار
     sorted_topics = sorted(topic_count.items(), key=lambda x: x[1], reverse=True)
@@ -673,7 +673,7 @@ def check_copyright_violation(script):
 
     try:
         response = client.chat.completions.create(
-         model="gpt-3.5-turbo",  # یا "o3-mini"
+         model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",  # یا "o3-mini"
          messages=[{"role": "user", "content": prompt}],
          max_tokens=250
 )
@@ -719,7 +719,7 @@ def check_youtube_policy(title, description):
 
     try:
         response = client.chat.completions.create(
-          model="gpt-3.5-turbo",  # یا "o3-mini"
+          model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",  # یا "o3-mini"
           messages=[{"role": "user", "content": prompt}],
           max_tokens=250
 )
@@ -760,7 +760,7 @@ def check_audio_copyright(audio_file):
 
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+            model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=100
         )
@@ -796,7 +796,7 @@ def check_video_content(video_file):
 
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+            model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=100
         )
