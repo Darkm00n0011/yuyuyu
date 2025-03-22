@@ -19,6 +19,7 @@ from bark import generate_audio
 from scipy.io.wavfile import write
 from pydub import AudioSegment, effects
 from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
+from supabase import create_client
 
 SHORTS_DURATION=59
 LONG_VIDEO_DURATION=600
@@ -42,6 +43,8 @@ if not YOUTUBE_API_KEY:
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 METADATA_URL = "https://www.googleapis.com/youtube/v3/videos"
 UPLOAD_URL = "https://www.googleapis.com/upload/youtube/v3/videos"
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 # تنظیم منطقه زمانی به Eastern Time (ET)
 EST = pytz.timezone('America/New_York')
@@ -79,6 +82,12 @@ def load_trending_topics():
 
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")  # 🔹 جایگزین با کلید API
 
+# دریافت API Keys از محیط
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
+
+# اتصال به Supabase
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 def fetch_youtube_trending(region_code="US", max_results=10):
     if not YOUTUBE_API_KEY:
         print("❌ Error: YouTube API Key is missing!")
@@ -96,7 +105,6 @@ def fetch_youtube_trending(region_code="US", max_results=10):
     try:
         response = requests.get(url, params=params)
         response.raise_for_status()  # ❗ چک کردن خطای HTTP
-
     except requests.exceptions.RequestException as e:
         print(f"❌ Request failed: {e}")
         return []
@@ -112,6 +120,7 @@ def fetch_youtube_trending(region_code="US", max_results=10):
             video_id = video["id"]
             view_count = int(video["statistics"].get("viewCount", 0))
             like_count = int(video["statistics"].get("likeCount", 0))
+            thumbnail = video["snippet"]["thumbnails"]["high"]["url"]
 
             # 🔹 مقیاس محبوبیت بر اساس بازدید و لایک (بین ۰ تا ۱۰۰)
             popularity = min(100, (view_count // 10000) + (like_count // 500))
@@ -126,22 +135,48 @@ def fetch_youtube_trending(region_code="US", max_results=10):
                     "video_id": video_id,
                     "view_count": view_count,
                     "like_count": like_count,
-                    "popularity": popularity
+                    "popularity": popularity,
+                    "thumbnail": thumbnail,
+                    "region": region_code
                 })
 
         except KeyError as e:
             print(f"⚠️ Missing key {e} for video: {video.get('id', 'Unknown')}")
 
+    if not trending_topics:
+        print("⚠ No trending videos found with enough popularity.")
+        return []
+
+    # 🚀 بررسی اینکه کدام ویدیوها از قبل ذخیره نشده‌اند
+    existing_videos = supabase.table("youtube_trends").select("video_id").execute()
+    existing_video_ids = {entry["video_id"] for entry in existing_videos.data} if existing_videos.data else set()
+
+    new_entries = [video for video in trending_topics if video["video_id"] not in existing_video_ids]
+
+    if new_entries:
+        # ✅ ذخیره در Supabase
+        response = supabase.table("youtube_trends").insert(new_entries).execute()
+
+        if response.get("status_code") == 201:
+            print(f"✅ {len(new_entries)} new YouTube trends saved to Supabase")
+        else:
+            print("❌ Error saving YouTube trends:", response.get("error"))
+    else:
+        print("✅ No new trending videos to save.")
+
     # ✅ ذخیره داده‌ها در فایل JSON
-    if trending_topics:
-        with open("trending_topics.json", "w") as file:
-            json.dump(trending_topics, file, indent=2)
-        print(f"✅ {len(trending_topics)} trending topics saved in trending_topics.json")
+    with open("trending_topics.json", "w") as file:
+        json.dump(trending_topics, file, indent=2)
+    
+    print(f"✅ {len(trending_topics)} trending topics saved in trending_topics.json")
 
     return trending_topics
 
+# 📌 تست تابع
+print(fetch_youtube_trending())
+
 def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
-    """ دریافت پست‌های پرطرفدار از چندین Reddit subreddit و ذخیره در trending_topics.json """
+    """ دریافت پست‌های پرطرفدار از چندین Reddit subreddit و ذخیره در Supabase """
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -194,16 +229,43 @@ def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
                 "popularity": round(popularity, 2)  # مقدار را تا دو رقم اعشار ذخیره می‌کنیم
             })
 
-    if reddit_trends:  # ✅ ذخیره فقط در صورت داشتن داده
-        with open("trending_topics.json", "w") as file:
-            json.dump(reddit_trends, file, indent=2)
+    if not reddit_trends:
+        print("⚠ No Reddit trends found with enough popularity.")
+        return []
 
-        print(f"✅ {len(reddit_trends)} Reddit trends saved in trending_topics.json")
+    # 🚀 بررسی اینکه کدام پست‌ها از قبل ذخیره نشده‌اند
+    existing_posts = supabase.table("reddit_trends").select("post_id").execute()
+    existing_post_ids = {entry["post_id"] for entry in existing_posts.data} if existing_posts.data else set()
 
-    return reddit_trends  # 🔹 بازگرداندن داده‌ها برای استفاده در برنامه
+    new_entries = [post for post in reddit_trends if post["post_id"] not in existing_post_ids]
+
+    if new_entries:
+        # ✅ ذخیره در Supabase
+        response = supabase.table("reddit_trends").insert(new_entries).execute()
+
+        if response.get("status_code") == 201:
+            print(f"✅ {len(new_entries)} new Reddit trends saved to Supabase")
+        else:
+            print("❌ Error saving Reddit trends:", response.get("error"))
+    else:
+        print("✅ No new Reddit trends to save.")
+
+    # ✅ ذخیره داده‌ها در فایل JSON
+    with open("trending_topics.json", "w") as file:
+        json.dump(reddit_trends, file, indent=2)
+    
+    print(f"✅ {len(reddit_trends)} Reddit trends saved in trending_topics.json")
+
+    return reddit_trends
+
+# 📌 تست تابع
+print(fetch_reddit_trends())
+
+from fetch_youtube import fetch_youtube_trending
+from fetch_reddit import fetch_reddit_trends
 
 def fetch_all_trends(region_code="US", reddit_subreddits=["gaming"], reddit_limit=10, time_period="day"):
-    """ دریافت و ترکیب داده‌های ترند از یوتیوب و ردیت و ذخیره در trending_topics.json """
+    """ دریافت و ترکیب داده‌های ترند از یوتیوب و ردیت و ذخیره در Supabase """
 
     print("🔍 Fetching YouTube Trends...")
     youtube_trends = fetch_youtube_trending(region_code)
@@ -211,36 +273,52 @@ def fetch_all_trends(region_code="US", reddit_subreddits=["gaming"], reddit_limi
     print("🔍 Fetching Reddit Trends...")
     reddit_trends = fetch_reddit_trends(reddit_subreddits, reddit_limit, time_period)
 
-    # ترکیب تمام ترندها در یک لیست واحد
+    # ترکیب همه ترندها در یک لیست
     all_trends = youtube_trends + reddit_trends
 
-    # افزودن زمان آخرین به‌روزرسانی
-    all_trends_data = {
-        "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "trends": all_trends
-    }
+    if not all_trends:
+        print("⚠ No trending data found.")
+        return []
 
-    # ذخیره در فایل
+    # 🚀 دریافت IDهای موجود در دیتابیس برای جلوگیری از تکرار
+    existing_trends = supabase.table("trending_topics").select("source_id").execute()
+    existing_ids = {item["source_id"] for item in existing_trends.data} if existing_trends.data else set()
+
+    # ✅ فیلتر کردن ترندهای جدید
+    new_trends = [trend for trend in all_trends if trend["video_id"] not in existing_ids]
+
+    if new_trends:
+        # ✅ ذخیره داده‌های جدید در Supabase
+        response = supabase.table("trending_topics").insert(new_trends).execute()
+
+        if response.get("status_code") == 201:
+            print(f"✅ {len(new_trends)} new trends saved to Supabase")
+        else:
+            print("❌ Error saving trends:", response.get("error"))
+    else:
+        print("✅ No new trends to save.")
+
+    # ✅ ذخیره تاریخ آخرین بروزرسانی
+    supabase.table("metadata").upsert({"key": "last_updated", "value": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}).execute()
+
+    # ✅ ذخیره در فایل JSON
     with open("trending_topics.json", "w") as file:
-        json.dump(all_trends_data, file, indent=2)
+        json.dump({"last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "trends": all_trends}, file, indent=2)
 
     print(f"✅ {len(all_trends)} trends saved in trending_topics.json")
 
     return all_trends
 
-print(fetch_youtube_trending())  # بررسی دریافت ترندهای یوتیوب
-print(fetch_reddit_trends())  # بررسی دریافت ترندهای ردیت
+# 📌 تست تابع
+print(fetch_all_trends())
 
 def select_best_trending_topic(json_file="trending_topics.json"):
-    """ انتخاب بهترین موضوع ترند شده از لیست ذخیره‌شده """
+    """ انتخاب بهترین موضوع ترند شده از لیست یوتیوب و ردیت، بر اساس تعداد تکرار و محبوبیت """
 
     try:
         with open(json_file, "r", encoding="utf-8") as file:
             data = json.load(file)
-
-            # اگر `data` دیکشنری باشه، `trends` رو بگیر، در غیر این صورت فرض کن خود `data` لیست ترندهاست
             trends = data.get("trends", []) if isinstance(data, dict) else data  
-
     except (FileNotFoundError, json.JSONDecodeError) as e:
         print(f"❌ Error: {json_file} not found or contains invalid JSON. ({e})")
         return None
@@ -249,46 +327,51 @@ def select_best_trending_topic(json_file="trending_topics.json"):
         print("❌ No trending topics found or invalid format.")
         return None
 
-    # فیلتر کردن داده‌های نامعتبر (باید دیکشنری باشند و کلید 'title' را داشته باشند)
-    valid_trends = [t for t in trends if isinstance(t, dict) and "title" in t]
+    # ✅ فیلتر داده‌های نامعتبر (باید حداقل 'title' و 'source' داشته باشند)
+    valid_trends = [t for t in trends if isinstance(t, dict) and "title" in t and "source" in t]
 
     if not valid_trends:
         print("❌ No valid trending topics found.")
         return None
 
-    # شمارش تعداد تکرار هر عنوان
-    topic_count = collections.Counter([t["title"] for t in valid_trends])
+    # ✅ وزن‌دهی به منابع مختلف
+    source_weights = {
+        "YouTube": 2,  # یوتیوب ارزش بیشتری دارد
+        "Reddit": 1    # ردیت وزن پایین‌تری دارد
+    }
 
-    # مرتب‌سازی بر اساس بیشترین تکرار
-    sorted_topics = sorted(topic_count.items(), key=lambda x: x[1], reverse=True)
+    # شمارش و امتیازدهی به هر عنوان
+    topic_scores = collections.defaultdict(int)
 
-    # تعریف کلمات کلیدی مرتبط
-    keywords = ["minecraft", "knowledge", "gaming", "ai", "technology", "computers"]
+    for trend in valid_trends:
+        title = trend["title"]
+        source = trend["source"]
+        popularity = trend.get("popularity", 0)  # امتیاز محبوبیت اگر وجود داشته باشد
+        weight = source_weights.get(source, 1)  # وزن پیش‌فرض ۱ اگر منبع ناشناخته باشد
 
-    # انتخاب اولین موضوع مرتبط با یکی از کلمات کلیدی
-    for topic, count in sorted_topics:
+        topic_scores[title] += weight * (1 + (popularity / 100))  # امتیاز نهایی
+
+    # مرتب‌سازی بر اساس امتیاز نهایی
+    sorted_topics = sorted(topic_scores.items(), key=lambda x: x[1], reverse=True)
+
+    # ✅ اولویت‌بندی موضوعات مرتبط
+    keywords = ["minecraft", "gaming", "ai", "technology", "computers", "knowledge"]
+
+    for topic, score in sorted_topics:
         if any(re.search(rf"\b{re.escape(keyword)}\b", topic, re.IGNORECASE) for keyword in keywords):
-            print(f"✅ Best topic selected: {topic} (Found in {count} sources)")
+            print(f"✅ Best topic selected: {topic} (Score: {score:.2f})")
             return topic
 
-    # در صورت نبودن موضوع مرتبط، انتخاب موضوع پرترندتر
+    # در صورت نبودن موضوع مرتبط، انتخاب موضوع پرامتیازتر
     best_fallback_topic = sorted_topics[0][0] if sorted_topics else None
     if best_fallback_topic:
         print(f"⚠ No suitable trending topic found. Using top topic: {best_fallback_topic}")
-    
+
     return best_fallback_topic
 
-# دریافت کلید API از متغیر محیطی
-PIXABAY_API_KEY = os.getenv("PIXABAY_API_KEY")
-PIXABAY_URL = "https://pixabay.com/api/videos/"
+# 🚀 اجرای تابع
+best_topic = select_best_trending_topic()
 
-if not PIXABAY_API_KEY:
-    print("❌ ERROR: Pixabay API Key is missing! Set 'PIXABAY_API_KEY' in Railway environment variables.")
-else:
-    print(f"✅ Pixabay API Key Loaded: {PIXABAY_API_KEY[:4]}****")
-
-# اجرای تابع
-topic = select_best_trending_topic()
 def download_best_minecraft_background(output_video="background.mp4"):
     """ دانلود بهترین ویدیو گیم‌پلی ماینکرفت از Pixabay و ذخیره آن """
     
