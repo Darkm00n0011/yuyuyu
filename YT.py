@@ -378,7 +378,6 @@ def generate_video_script(topic):
         print(f"❌ API Request Error: {e}")
         return None
 
-script = generate_video_script(topic)
 print(script)
 
 # Get API key from Railway environment variables
