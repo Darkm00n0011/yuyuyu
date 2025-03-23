@@ -20,6 +20,7 @@ from scipy.io.wavfile import write
 from pydub import AudioSegment, effects
 from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
 from supabase import create_client
+from fetch_youtube import fetch_youtube_trending
 
 SHORTS_DURATION=59
 LONG_VIDEO_DURATION=600
