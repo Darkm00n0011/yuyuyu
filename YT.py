@@ -617,7 +617,13 @@ def generate_thumbnail(topic, output_file="thumbnail.jpg"):
 
     # 🖌 اضافه کردن متن روی تصویر
     draw = ImageDraw.Draw(img)
-    font = ImageFont.truetype("impact.ttf", 90)  # فونت اینستاگرامی معروف
+    FONT_PATH = os.path.join(os.path.dirname(__file__), "impact.ttf")
+    try:
+        font = ImageFont.truetype(FONT_PATH, 90)  # فونت اینستاگرامی معروف
+    except OSError:
+        print("⚠️ Font not found, using default font.")
+        font = ImageFont.load_default()
+    
     text_position = (100, img.height - 150)
     
     # 🖌 افکت استروک برای خوانایی بهتر
@@ -631,10 +637,6 @@ def generate_thumbnail(topic, output_file="thumbnail.jpg"):
     img.save(output_file)
     print(f"✅ Thumbnail saved as {output_file}")
     return output_file
-
-# **🎯 تست**
-topic = "Minecraft Secrets"
-generate_thumbnail(topic)
 
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")  # باید API Key ست بشه
 
