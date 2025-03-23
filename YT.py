@@ -182,9 +182,6 @@ def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
 # 📌 تست تابع
 print(fetch_reddit_trends())
 
-from fetch_youtube import fetch_youtube_trending
-from fetch_reddit import fetch_reddit_trends
-
 def fetch_all_trends(region_code="US", reddit_subreddits=["gaming"], reddit_limit=10, time_period="day"):
     """ دریافت و ترکیب داده‌های ترند از یوتیوب و ردیت بدون ذخیره‌سازی """
 
