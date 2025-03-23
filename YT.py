@@ -445,14 +445,6 @@ def generate_video_metadata(topic):
         print("❌ Error generating metadata:", str(e))
         return None
 
-# **📌 Test the Function**
-topic = "Minecraft Secrets"
-metadata = generate_video_metadata(topic)
-print(metadata)
-
-
-
-
 def generate_voiceover(script, output_audio="voiceover.wav"):
     if not script or not isinstance(script, str):
         print("❌ Error: Invalid script provided!")
