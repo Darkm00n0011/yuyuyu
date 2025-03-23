@@ -729,6 +729,81 @@ def suggest_improvements():
         
     script= generate_video_script(topic)
 
+# بررسی ساعت مجاز برای آپلود
+def get_upload_type():
+    now = datetime.now(EST)
+    hour = now.hour
+
+    if 7 <= hour <= 9:
+        return "long_videos"  # زمان آپلود ویدیوی بلند
+    elif 11 <= hour <= 15:
+        return "shorts"  # زمان آپلود Shorts
+    return None
+
+# دریافت access token
+def get_access_token():
+    data = {
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "refresh_token": REFRESH_TOKEN,
+        "grant_type": "refresh_token"
+    }
+    response = requests.post(TOKEN_URL, data=data)
+    response_json = response.json()
+    if response.status_code != 200 or "access_token" not in response_json:
+        raise Exception("Failed to get access token: " + str(response_json))
+    return response_json.get("access_token")
+
+# آپلود متادیتا و دریافت video_id
+def upload_metadata(title, description, category_id=24, privacy_status="public"):
+    access_token = get_access_token()
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+    params = {"part": "snippet,status"}
+    metadata = {
+        "snippet": {
+            "title": title,
+            "description": description,
+            "categoryId": category_id  # Ensure categoryId is int
+        },
+        "status": {
+            "privacyStatus": privacy_status
+        }
+    }
+    metadata_response = requests.post(METADATA_URL, headers=headers, params=params, json=metadata)
+    if metadata_response.status_code != 200:
+        print("Error uploading metadata:", metadata_response.json())
+        return None
+    return metadata_response.json().get("id")
+
+# آپلود ویدیو
+def upload_video(video_file, video_id):
+    access_token = get_access_token()
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "X-Upload-Content-Type": "video/mp4",
+        "X-Upload-Content-Length": str(os.path.getsize(video_file))
+    }
+    init_request = requests.post(
+        f"{UPLOAD_URL}?uploadType=resumable&part=snippet,status",
+        headers=headers
+    )
+    if init_request.status_code != 200:
+        print("Error initializing upload:", init_request.json())
+        return
+    upload_url = init_request.headers.get("Location")
+    if not upload_url:
+        print("Failed to retrieve upload URL")
+        return
+    with open(video_file, "rb") as file:
+        upload_response = requests.put(upload_url, headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "video/mp4"
+        }, data=file)
+    print("Upload response:", upload_response.json())
+
 def check_copyright_violation(script):
     prompt = f"""
     Analyze the following script for potential copyright violations or plagiarism.
@@ -829,83 +904,6 @@ def check_upload_limit():
 
     return {"long_videos": long_videos, "shorts": shorts}
 
-# بررسی ساعت مجاز برای آپلود
-def get_upload_type():
-    now = datetime.now(EST)
-    hour = now.hour
-
-    if 7 <= hour <= 9:
-        return "long_videos"  # زمان آپلود ویدیوی بلند
-    elif 11 <= hour <= 15:
-        return "shorts"  # زمان آپلود Shorts
-    return None
-
-# دریافت access token
-def get_access_token():
-    data = {
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "refresh_token": REFRESH_TOKEN,
-        "grant_type": "refresh_token"
-    }
-    response = requests.post(TOKEN_URL, data=data)
-    response_json = response.json()
-    if response.status_code != 200 or "access_token" not in response_json:
-        raise Exception("Failed to get access token: " + str(response_json))
-    return response_json.get("access_token")
-
-# آپلود متادیتا و دریافت video_id
-def upload_metadata(title, description, category_id=24, privacy_status="public"):
-    access_token = get_access_token()
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json"
-    }
-    params = {"part": "snippet,status"}
-    metadata = {
-        "snippet": {
-            "title": title,
-            "description": description,
-            "categoryId": category_id  # Ensure categoryId is int
-        },
-        "status": {
-            "privacyStatus": privacy_status
-        }
-    }
-    metadata_response = requests.post(METADATA_URL, headers=headers, params=params, json=metadata)
-    if metadata_response.status_code != 200:
-        print("Error uploading metadata:", metadata_response.json())
-        return None
-    return metadata_response.json().get("id")
-
-# آپلود ویدیو
-def upload_video(video_file, video_id):
-    access_token = get_access_token()
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "X-Upload-Content-Type": "video/mp4",
-        "X-Upload-Content-Length": str(os.path.getsize(video_file))
-    }
-    init_request = requests.post(
-        f"{UPLOAD_URL}?uploadType=resumable&part=snippet,status",
-        headers=headers
-    )
-    if init_request.status_code != 200:
-        print("Error initializing upload:", init_request.json())
-        return
-    upload_url = init_request.headers.get("Location")
-    if not upload_url:
-        print("Failed to retrieve upload URL")
-        return
-    with open(video_file, "rb") as file:
-        upload_response = requests.put(upload_url, headers={
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "video/mp4"
-        }, data=file)
-    print("Upload response:", upload_response.json())
-
-upload_video = upload_video(video_file, video_id)
-
 # اجرای آپلود در زمان مناسب
 if __name__ == "__main__":
     print("🚀 Starting the YouTube Auto-Upload Bot...")
@@ -913,7 +911,7 @@ if __name__ == "__main__":
     # 1️⃣ تحلیل ویدیوهای قبلی و ارائه پیشنهادات برای بهینه‌سازی
     suggest_improvements()
 
-    # 2️⃣ دریافت و ذخیره‌ی ترندهای مختلف در `trending_topics.json`
+    # 2️⃣ دریافت و ذخیره‌ی ترندهای مختلف 
     fetch_all_trends()
 
     # 3️⃣ تحلیل داده‌های ترند و انتخاب بهترین موضوع
@@ -930,9 +928,7 @@ if __name__ == "__main__":
         print("❌ Script generation failed. Skipping video creation.")
         exit()
 
-    with open("video_script.txt", "w") as file:
-        file.write(script)
-    print("📜 Video script saved successfully!")
+    print("📜 Video script generated successfully!")
 
     # 5️⃣ تولید صداگذاری از روی متن
     voiceover = generate_voiceover(script)
