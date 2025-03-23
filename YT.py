@@ -118,9 +118,6 @@ def fetch_youtube_trending(region_code="US", max_results=10):
 
     return trending_topics
 
-# 📌 تست تابع
-print(fetch_youtube_trending())
-
 def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
     """ دریافت پست‌های پرطرفدار از چندین Reddit subreddit بدون ذخیره‌سازی """
 
@@ -179,9 +176,6 @@ def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
     
     return reddit_trends
 
-# 📌 تست تابع
-print(fetch_reddit_trends())
-
 def fetch_all_trends(region_code="US", reddit_subreddits=["gaming"], reddit_limit=10, time_period="day"):
     """ دریافت و ترکیب داده‌های ترند از یوتیوب و ردیت بدون ذخیره‌سازی """
 
@@ -198,10 +192,6 @@ def fetch_all_trends(region_code="US", reddit_subreddits=["gaming"], reddit_limi
         print("⚠ No trending data found.")
     
     return all_trends
-
-# 📌 تست تابع
-print(fetch_all_trends())
-
 
 def select_best_trending_topic(trends):
     """ انتخاب بهترین موضوع ترند شده از لیست یوتیوب و ردیت، بر اساس تعداد تکرار و محبوبیت """
