@@ -729,6 +729,23 @@ def suggest_improvements():
         
     script= generate_video_script(topic)
 
+def check_upload_limit():
+    today = datetime.now(timezone.utc).isoformat()[:10]  # تاریخ امروز به فرمت YYYY-MM-DD
+
+    url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&channelId={CHANNEL_ID}&maxResults=50&order=date&type=video&publishedAfter={today}T00:00:00Z&key={YOUTUBE_API_KEY}"
+    response = requests.get(url)
+
+    if response.status_code != 200:
+        print("❌ ERROR: Failed to fetch upload history from YouTube!")
+        return {"long_videos": 0, "shorts": 0}  # در صورت خطا، فرض می‌کنیم هیچ ویدیویی آپلود نشده
+
+    videos = response.json().get("items", [])
+
+    long_videos = sum(1 for v in videos if "shorts" not in v["snippet"]["title"].lower())  # تشخیص ویدیوهای عادی
+    shorts = sum(1 for v in videos if "shorts" in v["snippet"]["title"].lower())  # تشخیص YouTube Shorts
+
+    return {"long_videos": long_videos, "shorts": shorts}
+
 # بررسی ساعت مجاز برای آپلود
 def get_upload_type():
     now = datetime.now(EST)
@@ -886,23 +903,6 @@ video_metadata = generate_video_metadata(topic)
 video_metadata = check_and_fix_youtube_metadata(video_metadata)
 
 upload_video(enhanced_video, video_metadata)
-
-def check_upload_limit():
-    today = datetime.now(timezone.utc).isoformat()[:10]  # تاریخ امروز به فرمت YYYY-MM-DD
-
-    url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&channelId={CHANNEL_ID}&maxResults=50&order=date&type=video&publishedAfter={today}T00:00:00Z&key={YOUTUBE_API_KEY}"
-    response = requests.get(url)
-
-    if response.status_code != 200:
-        print("❌ ERROR: Failed to fetch upload history from YouTube!")
-        return {"long_videos": 0, "shorts": 0}  # در صورت خطا، فرض می‌کنیم هیچ ویدیویی آپلود نشده
-
-    videos = response.json().get("items", [])
-
-    long_videos = sum(1 for v in videos if "shorts" not in v["snippet"]["title"].lower())  # تشخیص ویدیوهای عادی
-    shorts = sum(1 for v in videos if "shorts" in v["snippet"]["title"].lower())  # تشخیص YouTube Shorts
-
-    return {"long_videos": long_videos, "shorts": shorts}
 
 # اجرای آپلود در زمان مناسب
 if __name__ == "__main__":
