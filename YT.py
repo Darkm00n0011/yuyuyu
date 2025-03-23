@@ -245,6 +245,8 @@ def select_best_trending_topic(trends):
 # 🚀 اجرای تابع
 trending_data = fetch_all_trends()
 best_topic = select_best_trending_topic(trending_data)
+trends = fetch_all_trending_topics()  # Fetch trending topics
+topic = select_best_trending_topic(trends)  # ✅ Pass `trends` as argument
 
 def download_best_minecraft_background(output_video="background.mp4"):
    #دانلود بهترین ویدیو گیم‌پلی ماینکرفت از Pixabay و ذخیره آن
