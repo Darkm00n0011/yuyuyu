@@ -116,7 +116,7 @@ def fetch_youtube_trending(region_code="US", max_results=10):
 
     if not trending_topics:
         print("⚠ No trending videos found with enough popularity.")
-    
+
     return trending_topics
 
 # 📌 تست تابع
