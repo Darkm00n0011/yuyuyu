@@ -902,7 +902,7 @@ def check_and_fix_youtube_metadata(video_metadata):
 video_metadata = generate_video_metadata(topic)
 video_metadata = check_and_fix_youtube_metadata(video_metadata)
 
-upload_video(enhanced_video, video_metadata)
+upload_video(enhance_video, video_metadata)
 
 # اجرای آپلود در زمان مناسب
 if __name__ == "__main__":
