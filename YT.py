@@ -413,6 +413,7 @@ def generate_video_metadata(topic):
 
         # Extract content
         content = response.choices[0].message.content.strip()
+        content = content.strip("```json").strip("```")  # Ensure it's clean JSON
 
         # Debugging: Print extracted content
         print("📜 Extracted Content:", content)
