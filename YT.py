@@ -408,26 +408,19 @@ def generate_video_metadata(topic):
             max_tokens=500
         )
 
-        # Debugging: Print raw API response
         print("🔍 Raw API Response:", response)
 
-        # Ensure response has choices
         if not response.choices:
             raise ValueError("Empty response from API")
 
-        # Extract content
         content = response.choices[0].message.content.strip()
+        
+        try:
+            metadata = json.loads(content)
+        except json.JSONDecodeError:
+            print("❌ Error: Invalid JSON format in API response.")
+            return None
 
-        # Remove Markdown JSON formatting if present
-        json_match = re.search(r"\{.*\}", content, re.DOTALL)
-        if json_match:
-            content = json_match.group(0)
-
-        # Debugging: Print extracted content
-        print("📜 Extracted Content:", content)
-
-        # Try parsing as JSON
-        metadata = json.loads(content)
         if not all(key in metadata for key in ["title", "description", "hashtags"]):
             raise ValueError("Missing expected keys in JSON")
 
@@ -935,7 +928,7 @@ if __name__ == "__main__":
     fetch_all_trends()
 
     # 3️⃣ تحلیل داده‌های ترند و انتخاب بهترین موضوع
-    selected_topic = select_best_trending_topic()
+    selected_topic = select_best_trending_topic(trends)
     if not selected_topic:
         print("⚠ No suitable topic found, skipping video creation.")
         exit()  # اگر موضوع مناسبی پیدا نشود، اجرا متوقف می‌شود.
