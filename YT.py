@@ -383,8 +383,8 @@ client = Together(api_key=TOGETHER_API_KEY)
 def generate_video_metadata(topic):
     print("📝 Generating video metadata...")
 
-    TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "MISSING_API_KEY")
-    if TOGETHER_API_KEY == "MISSING_API_KEY":
+    TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
+    if not TOGETHER_API_KEY:
         print("❌ ERROR: Together AI API Key is missing! Set 'TOGETHER_API_KEY' in Railway environment variables.")
         return None
 
@@ -411,31 +411,31 @@ def generate_video_metadata(topic):
         # Debugging: Print raw API response
         print("🔍 Raw API Response:", response)
 
+        # Ensure response has choices
+        if not response.choices:
+            raise ValueError("Empty response from API")
+
         # Extract content
         content = response.choices[0].message.content.strip()
-        content = content.strip("```json").strip("```")  # Ensure it's clean JSON
+
+        # Remove Markdown JSON formatting if present
+        json_match = re.search(r"\{.*\}", content, re.DOTALL)
+        if json_match:
+            content = json_match.group(0)
 
         # Debugging: Print extracted content
         print("📜 Extracted Content:", content)
 
         # Try parsing as JSON
-        try:
-            metadata = json.loads(content)
-            if not all(key in metadata for key in ["title", "description", "hashtags"]):
-                raise ValueError("Missing expected keys in JSON")
-        except (json.JSONDecodeError, ValueError):
-            print("⚠ Warning: Invalid JSON received. Using default metadata.")
-            metadata = {
-                "title": f"Awesome Video About {topic}!",
-                "description": f"This video is all about {topic}. Stay tuned for more!",
-                "hashtags": "#YouTube #Trending"
-            }
+        metadata = json.loads(content)
+        if not all(key in metadata for key in ["title", "description", "hashtags"]):
+            raise ValueError("Missing expected keys in JSON")
 
         print("✅ Video metadata generated successfully!")
         return metadata
 
     except Exception as e:
-        print("❌ Error generating metadata:", str(e))
+        print(f"❌ Error generating metadata: {e}")
         return None
 
 def generate_voiceover(script, output_audio="voiceover.wav"):
@@ -798,29 +798,48 @@ def upload_metadata(title, description, category_id=24, privacy_status="public")
 
 # آپلود ویدیو
 def upload_video(video_file, video_id):
+    if not isinstance(video_file, str) or not os.path.exists(video_file):
+        print(f"❌ ERROR: Invalid video file path: {video_file}")
+        return
+
     access_token = get_access_token()
+    if not access_token:
+        print("❌ ERROR: Failed to retrieve access token.")
+        return
+
     headers = {
         "Authorization": f"Bearer {access_token}",
         "X-Upload-Content-Type": "video/mp4",
         "X-Upload-Content-Length": str(os.path.getsize(video_file))
     }
+
     init_request = requests.post(
         f"{UPLOAD_URL}?uploadType=resumable&part=snippet,status",
         headers=headers
     )
+
     if init_request.status_code != 200:
-        print("Error initializing upload:", init_request.json())
+        print("❌ ERROR initializing upload:", init_request.text)
         return
+
     upload_url = init_request.headers.get("Location")
     if not upload_url:
-        print("Failed to retrieve upload URL")
+        print("❌ ERROR: Failed to retrieve upload URL.")
         return
+
+    print(f"✅ Upload URL obtained: {upload_url}")
+
     with open(video_file, "rb") as file:
         upload_response = requests.put(upload_url, headers={
             "Authorization": f"Bearer {access_token}",
-            "Content-Type": "video/mp4"
+            "Content-Type": "video/mp4",
+            "Content-Length": str(os.path.getsize(video_file))
         }, data=file)
-    print("Upload response:", upload_response.json())
+
+    if upload_response.status_code in [200, 201]:
+        print("✅ Video uploaded successfully!")
+    else:
+        print(f"❌ ERROR uploading video: {upload_response.text}")
 
 def check_copyright_violation(script):
     prompt = f"""
