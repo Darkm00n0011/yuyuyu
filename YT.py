@@ -397,7 +397,7 @@ def generate_video_metadata(topic):
     - The description should include a short summary of the video, a call to action, and links.
     - The hashtags should be relevant and increase discoverability.
     
-    Return the output in **valid JSON format** with keys: "title", "description", and "hashtags".
+    Return the output in **valid JSON format** with keys: "title", "description", and "hashtags". Do NOT include any extra text.
     """
 
     try:
@@ -408,19 +408,27 @@ def generate_video_metadata(topic):
             max_tokens=500
         )
 
+        # Debugging: Print raw API response
         print("🔍 Raw API Response:", response)
 
         if not response.choices:
             raise ValueError("Empty response from API")
 
+        # Extract content
         content = response.choices[0].message.content.strip()
-        
-        try:
-            metadata = json.loads(content)
-        except json.JSONDecodeError:
-            print("❌ Error: Invalid JSON format in API response.")
-            return None
 
+        # ✅ پاکسازی: حذف بلاک‌های مارک‌داون
+        json_match = re.search(r"\{.*\}", content, re.DOTALL)
+        if json_match:
+            content = json_match.group(0)
+
+        # Debugging: Print extracted content
+        print("📜 Extracted Cleaned Content:", content)
+
+        # Try parsing as JSON
+        metadata = json.loads(content)
+
+        # اطمینان از داشتن همه‌ی کلیدهای مورد نیاز
         if not all(key in metadata for key in ["title", "description", "hashtags"]):
             raise ValueError("Missing expected keys in JSON")
 
