@@ -19,6 +19,7 @@ from bark import generate_audio
 from scipy.io.wavfile import write
 from pydub import AudioSegment, effects
 from moviepy.editor import VideoFileClip, TextClip, CompositeVideoClip
+from dotenv import load_dotenv
 
 SHORTS_DURATION=59
 LONG_VIDEO_DURATION=600
@@ -38,7 +39,11 @@ if not YOUTUBE_API_KEY:
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")  # گرفتن API Key از متغیر محیطی
 PEXELS_URL = "https://api.pexels.com/v1/search"
 CHANNEL_ID = "UCa4J9qWMutBboFsyqd-pS2A"
-
+REDDIT_USERNAME = os.getenv("REDDIT_USERNAME")
+REDDIT_PASSWORD = os.getenv("REDDIT_PASSWORD")
+REDDIT_CLIENT_ID = os.getenv("REDDIT_CLIENT_ID")
+REDDIT_SECRET = os.getenv("REDDIT_SECRET")
+USER_AGENT = "MyRedditApp/0.1 by " + REDDIT_USERNAME  # Custom user agent
 
 
 # YouTube API URLs
@@ -118,19 +123,41 @@ def fetch_youtube_trending(region_code="US", max_results=10):
 
     return trending_topics
 
-import requests
-import time
+def get_reddit_token():
+    """Authenticate and get an OAuth token from Reddit."""
+    auth = requests.auth.HTTPBasicAuth(REDDIT_CLIENT_ID, REDDIT_SECRET)
+    data = {
+        "grant_type": "password",
+        "username": REDDIT_USERNAME,
+        "password": REDDIT_PASSWORD
+    }
+    headers = {"User-Agent": USER_AGENT}
+
+    response = requests.post("https://www.reddit.com/api/v1/access_token", auth=auth, data=data, headers=headers)
+
+    if response.status_code == 200:
+        return response.json().get("access_token")
+    else:
+        print("❌ Failed to get Reddit token:", response.json())
+        return None
 
 def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
-    """Fetch trending Reddit posts from multiple subreddits without saving."""
+    """Fetch trending Reddit posts from multiple subreddits using OAuth authentication."""
+
+    token = get_reddit_token()
+    if not token:
+        print("❌ Could not authenticate with Reddit.")
+        return []
 
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "Authorization": f"bearer {token}",
+        "User-Agent": USER_AGENT
     }
+
     reddit_trends = []
 
     for subreddit in subreddits:
-        url = f"https://www.reddit.com/r/{subreddit}/top.json?t={time_period}&limit={limit}"
+        url = f"https://oauth.reddit.com/r/{subreddit}/top.json?t={time_period}&limit={limit}"
 
         try:
             response = requests.get(url, headers=headers, timeout=10)
