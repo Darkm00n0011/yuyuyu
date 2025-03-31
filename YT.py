@@ -118,8 +118,11 @@ def fetch_youtube_trending(region_code="US", max_results=10):
 
     return trending_topics
 
+import requests
+import time
+
 def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
-    """ دریافت پست‌های پرطرفدار از چندین Reddit subreddit بدون ذخیره‌سازی """
+    """Fetch trending Reddit posts from multiple subreddits without saving."""
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -131,18 +134,23 @@ def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
 
         try:
             response = requests.get(url, headers=headers, timeout=10)
-            if response.status_code == 429:  # جلوگیری از بلاک شدن
+
+            if response.status_code == 429:  # Too many requests
                 print(f"⚠ Rate limit hit! Sleeping for 10 seconds...")
                 time.sleep(10)
                 continue
 
-            response.raise_for_status()
-            data = response.json()
+            response.raise_for_status()  # Raise an exception if the request failed
+            
+            try:
+                data = response.json()  # Parse JSON
+            except ValueError:
+                print(f"❌ Failed to parse JSON response from Reddit ({subreddit}).")
+                print("Response Content:", response.text[:500])  # Log first 500 chars
+                continue
+
         except requests.exceptions.RequestException as e:
             print(f"❌ Error fetching Reddit trends for {subreddit}: {e}")
-            continue
-        except ValueError:
-            print(f"❌ Error decoding JSON response from Reddit ({subreddit})!")
             continue
 
         posts = data.get("data", {}).get("children", [])
@@ -159,7 +167,7 @@ def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
             url = f"https://www.reddit.com{post_data.get('permalink', '')}"
             score = post_data.get("score", 0)
 
-            # محاسبه محبوبیت (با حداقل 1000 امتیاز برای محبوبیت 100%)
+            # Calculate popularity (max 100%)
             popularity = min(100, (score / max(1000, max_score)) * 100)
 
             reddit_trends.append({
@@ -171,10 +179,18 @@ def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
                 "popularity": round(popularity, 2)
             })
 
+        time.sleep(3)  # Pause between requests to avoid getting blocked
+
     if not reddit_trends:
         print("⚠ No Reddit trends found with enough popularity.")
     
     return reddit_trends
+
+# Example Usage:
+trends = fetch_reddit_trends(subreddits=["gaming", "Minecraft"], limit=5, time_period="day")
+for trend in trends:
+    print(trend)
+
 
 def fetch_all_trends(region_code="US", reddit_subreddits=["gaming"], reddit_limit=10, time_period="day"):
     """ دریافت و ترکیب داده‌های ترند از یوتیوب و ردیت بدون ذخیره‌سازی """
