@@ -27,6 +27,8 @@ VIDEO_QUALITY="4K"
 SHORTS_UPLOAD_TIME_UTC = time(15, 0)  # ساعت ۳ بعدازظهر UTC
 LONG_VIDEO_UPLOAD_TIME_UTC= time(12, 0)  # ساعت ۱۲ ظهر UTC
 
+load_dotenv()
+
 
 # Load environment variables from Railway
 CLIENT_ID = os.getenv("CLIENT_ID")
@@ -43,7 +45,8 @@ REDDIT_USERNAME = os.getenv("REDDIT_USERNAME")
 REDDIT_PASSWORD = os.getenv("REDDIT_PASSWORD")
 REDDIT_CLIENT_ID = os.getenv("REDDIT_CLIENT_ID")
 REDDIT_SECRET = os.getenv("REDDIT_SECRET")
-USER_AGENT = "MyRedditApp/0.1 by " + REDDIT_USERNAME  # Custom user agent
+# Set User-Agent
+USER_AGENT = f"MyRedditApp/0.1 by {REDDIT_USERNAME}"
 
 
 # YouTube API URLs
