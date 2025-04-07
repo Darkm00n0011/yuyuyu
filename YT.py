@@ -46,8 +46,7 @@ REDDIT_PASSWORD = os.getenv("REDDIT_PASSWORD")
 REDDIT_CLIENT_ID = os.getenv("REDDIT_CLIENT_ID")
 REDDIT_SECRET = os.getenv("REDDIT_SECRET")
 # Set User-Agent
-USER_AGENT = f"MyRedditApp/0.1 by {REDDIT_USERNAME}"
-
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 
 # YouTube API URLs
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -67,6 +66,41 @@ SHORT_VIDEO_FILE = "short_video.mp4"  # ویدیوی Shorts
 # تعداد آپلودها در روز
 MAX_LONG_UPLOADS = 1  # فقط 1 ویدیوی بلند در روز
 MAX_SHORTS_UPLOADS = 1  # فقط 1 Shorts در روز
+
+def fetch_google_trends():
+    """Fetch trending topics from Google Trends."""
+    url = "https://trends.google.com/trends/api/dailytrends"
+    params = {
+        "hl": "en",  # Language
+        "tz": "-120",  # Timezone offset
+        "geo": "US"  # Region code (e.g., "US", "GB", etc.)
+    }
+
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        # Data is wrapped in a Python function, so we need to clean it up
+        raw_data = response.text[5:]  # Remove ")]}'" from the beginning of the response
+        trends_data = response.json()
+        trending_topics = trends_data.get("default", {}).get("trendingSearchesDays", [])
+        
+        google_trends = []
+        for day in trending_topics:
+            for trend in day.get("trendingSearches", []):
+                google_trends.append({
+                    "title": trend.get("title", {}).get("query", "Unknown"),
+                    "url": trend.get("url", "Unknown"),
+                    "source": "Google Trends",
+                })
+
+        if not google_trends:
+            print("⚠ No Google trends found.")
+        
+        return google_trends
+
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Request failed: {e}")
+        return []
 
 def fetch_youtube_trending(region_code="US", max_results=10):
     if not YOUTUBE_API_KEY:
@@ -126,118 +160,27 @@ def fetch_youtube_trending(region_code="US", max_results=10):
 
     return trending_topics
 
-def get_reddit_token():
-    """Authenticate and get an OAuth token from Reddit."""
-    auth = requests.auth.HTTPBasicAuth(REDDIT_CLIENT_ID, REDDIT_SECRET)
-    data = {
-        "grant_type": "password",
-        "username": REDDIT_USERNAME,
-        "password": REDDIT_PASSWORD
-    }
-    headers = {"User-Agent": USER_AGENT}
-
-    response = requests.post("https://www.reddit.com/api/v1/access_token", auth=auth, data=data, headers=headers)
-
-    if response.status_code == 200:
-        return response.json().get("access_token")
-    else:
-        print("❌ Failed to get Reddit token:", response.json())
-        return None
-
-def fetch_reddit_trends(subreddits=["gaming"], limit=10, time_period="day"):
-    """Fetch trending Reddit posts from multiple subreddits using OAuth authentication."""
-
-    token = get_reddit_token()
-    if not token:
-        print("❌ Could not authenticate with Reddit.")
-        return []
-
-    headers = {
-        "Authorization": f"bearer {token}",
-        "User-Agent": USER_AGENT
-    }
-
-    reddit_trends = []
-
-    for subreddit in subreddits:
-        url = f"https://oauth.reddit.com/r/{subreddit}/top.json?t={time_period}&limit={limit}"
-
-        try:
-            response = requests.get(url, headers=headers, timeout=10)
-
-            if response.status_code == 429:  # Too many requests
-                print(f"⚠ Rate limit hit! Sleeping for 10 seconds...")
-                time.sleep(10)
-                continue
-
-            response.raise_for_status()  # Raise an exception if the request failed
-            
-            try:
-                data = response.json()  # Parse JSON
-            except ValueError:
-                print(f"❌ Failed to parse JSON response from Reddit ({subreddit}).")
-                print("Response Content:", response.text[:500])  # Log first 500 chars
-                continue
-
-        except requests.exceptions.RequestException as e:
-            print(f"❌ Error fetching Reddit trends for {subreddit}: {e}")
-            continue
-
-        posts = data.get("data", {}).get("children", [])
-        if not posts:
-            print(f"⚠ No trending posts found on r/{subreddit}!")
-            continue
-
-        max_score = max((post["data"].get("score", 1) for post in posts), default=1)
-
-        for post in posts:
-            post_data = post["data"]
-            title = post_data.get("title", "Unknown Title")
-            post_id = post_data.get("id", "")
-            url = f"https://www.reddit.com{post_data.get('permalink', '')}"
-            score = post_data.get("score", 0)
-
-            # Calculate popularity (max 100%)
-            popularity = min(100, (score / max(1000, max_score)) * 100)
-
-            reddit_trends.append({
-                "title": title,
-                "post_id": post_id,
-                "url": url,
-                "subreddit": subreddit,
-                "source": "Reddit",
-                "popularity": round(popularity, 2)
-            })
-
-        time.sleep(3)  # Pause between requests to avoid getting blocked
-
-    if not reddit_trends:
-        print("⚠ No Reddit trends found with enough popularity.")
-    
-    return reddit_trends
-
-# Example Usage:
-trends = fetch_reddit_trends(subreddits=["gaming", "Minecraft"], limit=5, time_period="day")
-for trend in trends:
-    print(trend)
-
-
-def fetch_all_trends(region_code="US", reddit_subreddits=["gaming"], reddit_limit=10, time_period="day"):
-    """ دریافت و ترکیب داده‌های ترند از یوتیوب و ردیت بدون ذخیره‌سازی """
+def fetch_all_trends(region_code="US"):
+    """ دریافت و ترکیب داده‌های ترند از یوتیوب و گوگل ترندز """
 
     print("🔍 Fetching YouTube Trends...")
     youtube_trends = fetch_youtube_trending(region_code)
 
-    print("🔍 Fetching Reddit Trends...")
-    reddit_trends = fetch_reddit_trends(reddit_subreddits, reddit_limit, time_period)
+    print("🔍 Fetching Google Trends...")
+    google_trends = fetch_google_trends()
 
     # ترکیب همه ترندها در یک لیست
-    all_trends = youtube_trends + reddit_trends
+    all_trends = youtube_trends + google_trends
 
     if not all_trends:
         print("⚠ No trending data found.")
     
     return all_trends
+
+# فراخوانی تابع برای گرفتن ترندها
+trends = fetch_all_trends(region_code="US")
+for trend in trends:
+    print(trend)
 
 def select_best_trending_topic(trends):
     """ انتخاب بهترین موضوع ترند شده از لیست یوتیوب و ردیت، بر اساس تعداد تکرار و محبوبیت """
